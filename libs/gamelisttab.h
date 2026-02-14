@@ -27,11 +27,16 @@ private slots:
     void openFileLocation();
     void removeGame();
 
+    void onRowClicked(int row, int column);
+    void runGame(QString exePath);
+    void openGameFolder(QString path);
+
 private:
     void setupUI();
     
     QLineEdit *searchEdit;
     QTableWidget *gameTable;
+    int expandedRow;
 };
 
 #endif // GAMELISTTAB_H

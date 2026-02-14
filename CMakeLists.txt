@@ -31,6 +31,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         libs/tagmanager.h
         libs/tagmanagerdialog.h
         libs/thumbnailmanager.h
+        libs/gamedetailwidget.h
 
         src/mainwindow.cpp
         src/filelisttab.cpp
@@ -41,6 +42,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         src/tagmanager.cpp
         src/tagmanagerdialog.cpp
         src/thumbnailmanager.cpp
+        src/gamedetailwidget.cpp
 
     )
 # Define target properties for Android with Qt 6 as:

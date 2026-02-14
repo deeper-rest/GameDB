@@ -1,4 +1,13 @@
 #include "gamelisttab.h"
+#include "gamedetailwidget.h"
+#include <QVBoxLayout>
+#include <QHeaderView>
+#include <QMenu>
+#include <QDesktopServices>
+#include <QUrl>
+#include <QMessageBox>
+#include <QFileInfo>
+#include <QProcess>
 
 GameListTab::GameListTab() {
     setupUI();
@@ -27,6 +36,7 @@ void GameListTab::setupUI() {
     this->gameTable->setContextMenuPolicy(Qt::CustomContextMenu);
     this->gameTable->setIconSize(QSize(48, 48)); // Set icon size
     
+    connect(this->gameTable, &QTableWidget::cellClicked, this, &GameListTab::onRowClicked);
     connect(this->gameTable, &QTableWidget::cellDoubleClicked, this, &GameListTab::onDoubleClicked);
     connect(this->gameTable, &QTableWidget::customContextMenuRequested, this, &GameListTab::showContextMenu);
     
@@ -35,6 +45,7 @@ void GameListTab::setupUI() {
 
 void GameListTab::refreshList() {
     this->gameTable->setRowCount(0);
+    this->expandedRow = -1; // Reset expansion on refresh
     QList<GameItem> games = GameManager::instance().getGames();
     QString filter = this->searchEdit->text().toLower();
     
@@ -82,13 +93,9 @@ void GameListTab::onSearchChanged(const QString &text) {
 }
 
 void GameListTab::onDoubleClicked(int row, int column) {
+    Q_UNUSED(row);
     Q_UNUSED(column);
-    QString path = this->gameTable->item(row, 5)->text(); // Path is now col 5
-    QFileInfo info(path);
-    QString folderPath = info.absolutePath();
-    if (info.isDir()) folderPath = info.absoluteFilePath();
-    
-    QDesktopServices::openUrl(QUrl::fromLocalFile(folderPath));
+    // Double click action disabled as per user request
 }
 
 void GameListTab::showContextMenu(const QPoint &pos) {
@@ -116,4 +123,79 @@ void GameListTab::removeGame() {
     if (QMessageBox::question(this, "Remove Game", "Are you sure you want to remove this game from the library?") == QMessageBox::Yes) {
         GameManager::instance().removeGameByPath(path);
     }
+}
+
+void GameListTab::onRowClicked(int row, int column) {
+    Q_UNUSED(column);
+    
+    // 1. If logic for detail row
+    if (this->expandedRow != -1 && row == this->expandedRow + 1) {
+        return; // Clicked on the detail widget itself (though usually consumed by widget)
+    }
+    
+    // 2. Collapse existing if any
+    if (this->expandedRow != -1) {
+        int oldExpanded = this->expandedRow;
+        this->gameTable->removeRow(oldExpanded + 1);
+        this->expandedRow = -1;
+        
+        // Adjust clicked row index if it was below the expanded row
+        if (row > oldExpanded + 1) {
+            row--; 
+        } else if (row == oldExpanded) {
+            // Clicked the same row to collapse
+            return;
+        }
+    }
+    
+    // 3. Expand new row
+    // Get GameItem data. 
+    // Wait, since we are inserting/removing rows, maintaining mapping to GameManager list is tricky if we use index.
+    // Ideally we store hidden data in the row?
+    // Current refreshList populates table 1:1 with filtered list.
+    // If we filter, index matches the filtered list.
+    // BUT since we insert a row, the visual index mismatches the list index for subsequent items.
+    // Solution: Get data BEFORE inserting row.
+    // Identify which game it is from the Hidden Path Column (Col 5).
+    
+    QTableWidgetItem *pathItem = this->gameTable->item(row, 5);
+    if (!pathItem) return;
+    QString path = pathItem->text();
+    
+    GameItem item = GameManager::instance().getGameByPath(path);
+    
+    // Insert Row
+    this->gameTable->insertRow(row + 1);
+    this->gameTable->setSpan(row + 1, 0, 1, 6); // Span all columns
+    this->gameTable->setRowHeight(row + 1, 280); // Height for detail widget
+    
+    GameDetailWidget *detail = new GameDetailWidget(item);
+    connect(detail, &GameDetailWidget::playGame, this, &GameListTab::runGame);
+    connect(detail, &GameDetailWidget::openFolder, this, &GameListTab::openGameFolder);
+    
+    this->gameTable->setCellWidget(row + 1, 0, detail);
+    
+    this->expandedRow = row;
+}
+
+void GameListTab::runGame(QString exePath) {
+    if (exePath.isEmpty()) return;
+    
+    QFileInfo info(exePath);
+    QString workingDir = info.absolutePath();
+    
+    bool success = QProcess::startDetached(exePath, QStringList(), workingDir);
+    if (!success) {
+        QMessageBox::critical(this, tr("Error"), tr("Failed to launch game:\n%1").arg(exePath));
+    }
+}
+
+void GameListTab::openGameFolder(QString path) {
+    if (path.isEmpty()) return;
+    
+    QFileInfo info(path);
+    QString openPath = info.absolutePath();
+    if (info.isDir()) openPath = info.absoluteFilePath();
+    
+    QDesktopServices::openUrl(QUrl::fromLocalFile(openPath));
 }

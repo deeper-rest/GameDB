@@ -21,6 +21,7 @@ public:
     void removeGame(int index);
     void removeGameByPath(const QString &path);
     QList<GameItem> getGames() const;
+    GameItem getGameByPath(const QString &path) const;
     
     void saveGames();
     void loadGames();

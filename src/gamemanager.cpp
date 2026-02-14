@@ -115,6 +115,15 @@ void GameManager::loadGames() {
     emit libraryUpdated();
 }
 
+GameItem GameManager::getGameByPath(const QString &path) const {
+    for (const auto &game : this->library) {
+        if (game.filePath == path) {
+            return game;
+        }
+    }
+    return GameItem(); // Return empty item if not found
+}
+
 QJsonObject GameManager::gameToJson(const GameItem &item) {
     QJsonObject obj;
     obj["cleanName"] = item.cleanName;
