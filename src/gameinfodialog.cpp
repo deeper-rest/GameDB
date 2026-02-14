@@ -80,6 +80,44 @@ void GameInfoDialog::setupUI() {
         }
     }
     mainLayout->addWidget(this->tagList);
+    
+    // --- Thumbnail & Launch Section ---
+    QGroupBox *thumbBox = new QGroupBox(tr("Thumbnail & Launch"));
+    QVBoxLayout *thumbLayout = new QVBoxLayout(thumbBox);
+    
+    // EXE Selection (For Auto Capture & Launching)
+    QHBoxLayout *exeLayout = new QHBoxLayout();
+    exeLayout->addWidget(new QLabel(tr("Execute File (.exe):")));
+    this->exePathEdit = new QLineEdit(this->item.exePath);
+    QPushButton *btnBrowseExe = new QPushButton(tr("Browse..."));
+    connect(btnBrowseExe, &QPushButton::clicked, this, &GameInfoDialog::onBrowseExeClicked);
+    exeLayout->addWidget(this->exePathEdit);
+    exeLayout->addWidget(btnBrowseExe);
+    thumbLayout->addLayout(exeLayout);
+    
+    // Preview
+    this->imagePreview = new QLabel();
+    this->imagePreview->setFixedSize(200, 150);
+    this->imagePreview->setStyleSheet("border: 1px solid #ccc; background-color: #eee;");
+    this->imagePreview->setAlignment(Qt::AlignCenter);
+    this->imagePreview->setText("No Image");
+    updateThumbnailPreview(); // Load existing if any
+    
+    // Capture Controls
+    QHBoxLayout *capLayout = new QHBoxLayout();
+    capLayout->addWidget(new QLabel(tr("Delay (sec):")));
+    this->delaySpin = new QSpinBox();
+    this->delaySpin->setRange(1, 60);
+    this->delaySpin->setValue(10);
+    capLayout->addWidget(this->delaySpin);
+    
+    QPushButton *btnCapture = new QPushButton(tr("Auto Capture"));
+    connect(btnCapture, &QPushButton::clicked, this, &GameInfoDialog::onCaptureClicked);
+    capLayout->addWidget(btnCapture);
+    
+    thumbLayout->addWidget(this->imagePreview, 0, Qt::AlignCenter);
+    thumbLayout->addLayout(capLayout);
+    mainLayout->addWidget(thumbBox);
 
     // Buttons
     QHBoxLayout *btnLayout = new QHBoxLayout();
@@ -92,12 +130,65 @@ void GameInfoDialog::setupUI() {
     btnLayout->addWidget(this->saveButton);
     btnLayout->addWidget(this->cancelButton);
     mainLayout->addLayout(btnLayout);
+    
+    // Initialize Manager
+    this->thumbManager = new ThumbnailManager(this);
+    connect(this->thumbManager, &ThumbnailManager::captureFinished, this, &GameInfoDialog::onCaptureFinished);
+    connect(this->thumbManager, &ThumbnailManager::captureFailed, this, &GameInfoDialog::onCaptureFailed);
+}
+
+void GameInfoDialog::updateThumbnailPreview() {
+    if (!this->item.thumbnailPath.isEmpty() && QFile::exists(this->item.thumbnailPath)) {
+        QPixmap pix(this->item.thumbnailPath);
+        this->imagePreview->setPixmap(pix.scaled(this->imagePreview->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    } else {
+        this->imagePreview->setText("No Image");
+    }
+}
+
+void GameInfoDialog::onBrowseExeClicked() {
+    QString dir = this->item.filePath;
+    if (QFileInfo(dir).isFile()) dir = QFileInfo(dir).absolutePath();
+    
+    QString path = QFileDialog::getOpenFileName(this, tr("Select Executable"), dir, "Executables (*.exe)");
+    if (!path.isEmpty()) {
+        this->exePathEdit->setText(path);
+    }
+}
+
+void GameInfoDialog::onCaptureClicked() {
+    QString exe = this->exePathEdit->text();
+    if (exe.isEmpty()) {
+        QMessageBox::warning(this, tr("Warning"), tr("Please select an executable file first."));
+        return;
+    }
+    
+    this->saveButton->setEnabled(false);
+    this->imagePreview->setText("Capturing...");
+    this->thumbManager->startCapture(exe, this->delaySpin->value());
+}
+
+void GameInfoDialog::onCaptureFinished(const QString &path) {
+    this->item.thumbnailPath = path;
+    updateThumbnailPreview();
+    this->saveButton->setEnabled(true);
+    QMessageBox::information(this, tr("Success"), tr("Thumbnail captured successfully!"));
+}
+
+void GameInfoDialog::onCaptureFailed(const QString &reason) {
+    this->imagePreview->setText("Failed");
+    this->saveButton->setEnabled(true);
+    QMessageBox::critical(this, tr("Capture Failed"), reason);
 }
 
 void GameInfoDialog::save() {
     this->item.cleanName = this->nameEdit->text();
     this->item.folderName = this->folderNameEdit->text();
     this->item.koreanSupport = this->koreanCheck->isChecked();
+    this->item.exePath = this->exePathEdit->text();
+    // thumbnailPath is already updated in item via onCaptureFinished, 
+    // BUT what if we want to allow manual browsing later? 
+    // needed: manual browse for image. But for now, Auto Capture is the request.
     
     this->item.tags.clear();
     for (int i = 0; i < this->tagList->count(); ++i) {

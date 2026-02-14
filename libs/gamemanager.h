@@ -25,6 +25,10 @@ public:
     void saveGames();
     void loadGames();
 
+public slots:
+    void onTagRenamed(const QString &oldTag, const QString &newTag);
+    void onTagRemoved(const QString &tag);
+
 signals:
     void gameAdded(GameItem item);
     void gameRemoved(QString path);

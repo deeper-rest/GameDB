@@ -22,6 +22,10 @@ struct GameItem {
     bool koreanSupport = false;
     QString folderName; // Folder name or File name without path
     QStringList tags;
+    
+    // Thumbnail & Launch
+    QString thumbnailPath;
+    QString exePath; // Specific executable to run (for Folder type games)
 };
 
 #endif // GAMEDATA_H

@@ -1,4 +1,11 @@
 #include "gamemanager.h"
+#include "tagmanager.h"
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonArray>
+#include <QStandardPaths>
+#include <QDir>
 #include <QDebug>
 
 GameManager& GameManager::instance() {
@@ -16,6 +23,10 @@ GameManager::GameManager(QObject *parent) : QObject(parent) {
         dir.mkpath(".");
     }
     this->savePath = dir.filePath("games.json");
+    
+    // Connect TagManager signals for consistency
+    connect(&TagManager::instance(), &TagManager::tagRenamed, this, &GameManager::onTagRenamed);
+    connect(&TagManager::instance(), &TagManager::tagRemoved, this, &GameManager::onTagRemoved);
     
     loadGames();
 }
@@ -118,6 +129,9 @@ QJsonObject GameManager::gameToJson(const GameItem &item) {
     for (const QString &t : item.tags) tagsArr.append(t);
     obj["tags"] = tagsArr;
     
+    obj["thumbnailPath"] = item.thumbnailPath;
+    obj["exePath"] = item.exePath;
+    
     return obj;
 }
 
@@ -130,6 +144,8 @@ GameItem GameManager::jsonToGame(const QJsonObject &obj) {
     
     item.koreanSupport = obj["koreanSupport"].toBool();
     item.folderName = obj["folderName"].toString();
+    item.thumbnailPath = obj["thumbnailPath"].toString();
+    item.exePath = obj["exePath"].toString();
     
     if (obj.contains("tags") && obj["tags"].isArray()) {
         QJsonArray tagsArr = obj["tags"].toArray();
@@ -139,4 +155,35 @@ GameItem GameManager::jsonToGame(const QJsonObject &obj) {
     }
     
     return item;
+}
+
+void GameManager::onTagRenamed(const QString &oldTag, const QString &newTag) {
+    bool changed = false;
+    for (GameItem &game : this->library) {
+        if (game.tags.contains(oldTag)) {
+            int idx = game.tags.indexOf(oldTag);
+            game.tags.replace(idx, newTag);
+            changed = true;
+        }
+    }
+    
+    if (changed) {
+        saveGames();
+        emit libraryUpdated();
+    }
+}
+
+void GameManager::onTagRemoved(const QString &tag) {
+    bool changed = false;
+    for (GameItem &game : this->library) {
+        if (game.tags.contains(tag)) {
+            game.tags.removeAll(tag);
+            changed = true;
+        }
+    }
+    
+    if (changed) {
+        saveGames();
+        emit libraryUpdated();
+    }
 }

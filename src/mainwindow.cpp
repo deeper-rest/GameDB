@@ -12,6 +12,7 @@ MainWindow::MainWindow() {
     connect(this->scanner, &GameScanner::gameFound, this, &MainWindow::onGameFound);
     connect(this->scanner, &GameScanner::scanFinished, this, &MainWindow::onScanFinished);
     
+
     // We connect signal from UI to Scanner in thread
     // Connect scanRequested directly to scanner::scanDirectory (which is now a slot)
     connect(this->fileListTab, &FileListTab::scanRequested, this->scanner, &GameScanner::scanDirectory);
@@ -22,12 +23,14 @@ MainWindow::~MainWindow() {
     this->workerThread->wait();
 }
 
+void MainWindow::openTagManager() {
+    TagManagerDialog dialog(this);
+    dialog.exec();
+}
+
 void MainWindow::setMainUI() {
     resize(1200, 675);
 
-    this->findDirPath = new QPushButton("파일 위치");
-    QObject::connect(this->findDirPath, &QPushButton::clicked, this, &MainWindow::getDirPath);
-    
     this->mainLayout = new QGridLayout();
     this->mainWidget = new QWidget();
 
@@ -52,12 +55,19 @@ void MainWindow::setSelectDirUI() {
     
     this->selectDirFrame->setStyleSheet(MAINBOX_STYLESHEET);
 
-    this->selectDirLayout = new QGridLayout(this->selectDirFrame);
-    this->findDirPath = new QPushButton(tr("선택"));
-
-    QObject::connect(this->findDirPath, &QPushButton::clicked, this, &MainWindow::getDirPath);
+    QHBoxLayout *dirLayout = new QHBoxLayout();
+    this->dirPathLabel = new QLabel(tr("No Directory Selected"));
+    QPushButton *dirBtn = new QPushButton(tr("Select Directory"));
+    QPushButton *tagBtn = new QPushButton(tr("Manage Tags"));
     
-    this->selectDirLayout->addWidget(this->findDirPath, 0, 0, 1, 1);
+    connect(dirBtn, &QPushButton::clicked, this, &MainWindow::getDirPath);
+    connect(tagBtn, &QPushButton::clicked, this, &MainWindow::openTagManager);
+    
+    dirLayout->addWidget(this->dirPathLabel);
+    dirLayout->addWidget(dirBtn);
+    dirLayout->addWidget(tagBtn);
+    
+    this->selectDirFrame->setLayout(dirLayout);
 }
 
 void MainWindow::setMainTabUI() {
@@ -79,9 +89,12 @@ void MainWindow::setMainTabUI() {
 }
 
 void MainWindow::getDirPath() {
-    this->dirPath = QFileDialog::getExistingDirectory(this, tr("폴더 선택"), "./", QFileDialog::ShowDirsOnly);
+    QString path = QFileDialog::getExistingDirectory(this, tr("폴더 선택"), "./", QFileDialog::ShowDirsOnly);
     
-    if (this->dirPath.isEmpty()) return;
+    if (path.isEmpty()) return;
+    
+    this->dirPath = path;
+    if (this->dirPathLabel) this->dirPathLabel->setText(path);
 
     // Clear existing
     this->fileListTab->clearItems();
