@@ -18,9 +18,10 @@ void GameListTab::setupUI() {
     
     // Table
     this->gameTable = new QTableWidget();
-    this->gameTable->setColumnCount(3);
-    this->gameTable->setHorizontalHeaderLabels(QStringList() << "Name" << "Type" << "Path");
+    this->gameTable->setColumnCount(6); // Name, Folder Name, Type, Korean, Tags, Path
+    this->gameTable->setHorizontalHeaderLabels(QStringList() << "Name" << "Folder Name" << "Type" << "Korean" << "Tags" << "Path");
     this->gameTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    this->gameTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
     this->gameTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     this->gameTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     this->gameTable->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -37,7 +38,7 @@ void GameListTab::refreshList() {
     QString filter = this->searchEdit->text().toLower();
     
     for (const auto &game : games) {
-        if (!filter.isEmpty() && !game.cleanName.toLower().contains(filter)) {
+        if (!filter.isEmpty() && !game.cleanName.toLower().contains(filter) && !game.folderName.toLower().contains(filter)) {
             continue;
         }
         
@@ -45,6 +46,7 @@ void GameListTab::refreshList() {
         this->gameTable->insertRow(row);
         
         this->gameTable->setItem(row, 0, new QTableWidgetItem(game.cleanName));
+        this->gameTable->setItem(row, 1, new QTableWidgetItem(game.folderName));
         
         QString typeStr;
         switch(game.type) {
@@ -55,8 +57,17 @@ void GameListTab::refreshList() {
             case GameType::Iso: typeStr = "Iso"; break; 
             default: typeStr = "Unknown"; break;
         }
-        this->gameTable->setItem(row, 1, new QTableWidgetItem(typeStr));
-        this->gameTable->setItem(row, 2, new QTableWidgetItem(game.filePath));
+        this->gameTable->setItem(row, 2, new QTableWidgetItem(typeStr));
+        
+        // Korean
+        this->gameTable->setItem(row, 3, new QTableWidgetItem(game.koreanSupport ? "O" : "X"));
+        // Center align the O/X
+        this->gameTable->item(row, 3)->setTextAlignment(Qt::AlignCenter);
+        
+        // Tags
+        this->gameTable->setItem(row, 4, new QTableWidgetItem(game.tags.join(", ")));
+        
+        this->gameTable->setItem(row, 5, new QTableWidgetItem(game.filePath));
     }
 }
 
@@ -66,7 +77,7 @@ void GameListTab::onSearchChanged(const QString &text) {
 
 void GameListTab::onDoubleClicked(int row, int column) {
     Q_UNUSED(column);
-    QString path = this->gameTable->item(row, 2)->text();
+    QString path = this->gameTable->item(row, 5)->text(); // Path is now col 5
     QFileInfo info(path);
     QString folderPath = info.absolutePath();
     if (info.isDir()) folderPath = info.absoluteFilePath();
@@ -94,7 +105,7 @@ void GameListTab::removeGame() {
     int row = this->gameTable->currentRow();
     if (row < 0) return;
     
-    QString path = this->gameTable->item(row, 2)->text();
+    QString path = this->gameTable->item(row, 5)->text(); // Path is now col 5
     
     if (QMessageBox::question(this, "Remove Game", "Are you sure you want to remove this game from the library?") == QMessageBox::Yes) {
         GameManager::instance().removeGameByPath(path);

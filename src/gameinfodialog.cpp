@@ -16,6 +16,21 @@ void GameInfoDialog::setupUI() {
     nameLayout->addWidget(nameLabel);
     nameLayout->addWidget(this->nameEdit);
     mainLayout->addLayout(nameLayout);
+    
+    // Folder Name
+    QHBoxLayout *folderLayout = new QHBoxLayout();
+    QLabel *folderLabel = new QLabel(tr("Folder/File Name:"));
+    // Derive folder name if empty
+    QString folderName = this->item.folderName;
+    if (folderName.isEmpty()) {
+        QFileInfo info(this->item.filePath);
+        folderName = info.fileName();
+    }
+    this->folderNameEdit = new QLineEdit(folderName);
+    this->folderNameEdit->setReadOnly(true); // User requested just to store it, maybe editable? User said "actual game name, folder location, folder name". Let's make it read-only for now as it comes from file system.
+    folderLayout->addWidget(folderLabel);
+    folderLayout->addWidget(this->folderNameEdit);
+    mainLayout->addLayout(folderLayout);
 
     // Path (Read Only)
     QHBoxLayout *pathLayout = new QHBoxLayout();
@@ -36,14 +51,35 @@ void GameInfoDialog::setupUI() {
     this->typeCombo->addItem("Rar", static_cast<int>(GameType::Rar));
     this->typeCombo->addItem("Iso", static_cast<int>(GameType::Iso));
     
-    // Set current index based on item.type
     int index = this->typeCombo->findData(static_cast<int>(this->item.type));
     if (index != -1) this->typeCombo->setCurrentIndex(index);
-    this->typeCombo->setEnabled(false); // Type is determined by file extension usually, let's keep it fixed for now
+    this->typeCombo->setEnabled(false);
     
     typeLayout->addWidget(typeLabel);
     typeLayout->addWidget(this->typeCombo);
     mainLayout->addLayout(typeLayout);
+    
+    // Korean Support
+    this->koreanCheck = new QCheckBox(tr("Korean Support"));
+    this->koreanCheck->setChecked(this->item.koreanSupport);
+    mainLayout->addWidget(this->koreanCheck);
+    
+    // Tags
+    QLabel *tagLabel = new QLabel(tr("Tags:"));
+    mainLayout->addWidget(tagLabel);
+    
+    this->tagList = new QListWidget();
+    QStringList allTags = TagManager::instance().getTags();
+    for (const QString &tag : allTags) {
+        QListWidgetItem *item = new QListWidgetItem(tag, this->tagList);
+        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+        if (this->item.tags.contains(tag)) {
+            item->setCheckState(Qt::Checked);
+        } else {
+            item->setCheckState(Qt::Unchecked);
+        }
+    }
+    mainLayout->addWidget(this->tagList);
 
     // Buttons
     QHBoxLayout *btnLayout = new QHBoxLayout();
@@ -60,6 +96,17 @@ void GameInfoDialog::setupUI() {
 
 void GameInfoDialog::save() {
     this->item.cleanName = this->nameEdit->text();
+    this->item.folderName = this->folderNameEdit->text();
+    this->item.koreanSupport = this->koreanCheck->isChecked();
+    
+    this->item.tags.clear();
+    for (int i = 0; i < this->tagList->count(); ++i) {
+        QListWidgetItem *tItem = this->tagList->item(i);
+        if (tItem->checkState() == Qt::Checked) {
+            this->item.tags.append(tItem->text());
+        }
+    }
+    
     accept();
 }
 

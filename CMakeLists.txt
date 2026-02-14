@@ -28,6 +28,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         libs/gamemanager.h
         libs/gameinfodialog.h
         libs/gamelisttab.h
+        libs/tagmanager.h
 
         src/mainwindow.cpp
         src/filelisttab.cpp
@@ -35,6 +36,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         src/gamemanager.cpp
         src/gameinfodialog.cpp
         src/gamelisttab.cpp
+        src/tagmanager.cpp
 
     )
 # Define target properties for Android with Qt 6 as:

@@ -8,7 +8,11 @@
 #include <QLabel>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QCheckBox>
+#include <QListWidget>
+
 #include "gamedata.h"
+#include "tagmanager.h"
 
 class GameInfoDialog : public QDialog {
     Q_OBJECT
@@ -25,8 +29,12 @@ private:
 
     GameItem item;
     QLineEdit *nameEdit;
+    QLineEdit *folderNameEdit;
     QLineEdit *pathEdit;
     QComboBox *typeCombo;
+    QCheckBox *koreanCheck;
+    QListWidget *tagList;
+    
     QPushButton *saveButton;
     QPushButton *cancelButton;
 };

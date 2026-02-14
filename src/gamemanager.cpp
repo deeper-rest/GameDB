@@ -110,6 +110,14 @@ QJsonObject GameManager::gameToJson(const GameItem &item) {
     obj["originalName"] = item.originalName;
     obj["filePath"] = item.filePath;
     obj["type"] = static_cast<int>(item.type);
+    
+    obj["koreanSupport"] = item.koreanSupport;
+    obj["folderName"] = item.folderName;
+    
+    QJsonArray tagsArr;
+    for (const QString &t : item.tags) tagsArr.append(t);
+    obj["tags"] = tagsArr;
+    
     return obj;
 }
 
@@ -119,5 +127,16 @@ GameItem GameManager::jsonToGame(const QJsonObject &obj) {
     item.originalName = obj["originalName"].toString();
     item.filePath = obj["filePath"].toString();
     item.type = static_cast<GameType>(obj["type"].toInt());
+    
+    item.koreanSupport = obj["koreanSupport"].toBool();
+    item.folderName = obj["folderName"].toString();
+    
+    if (obj.contains("tags") && obj["tags"].isArray()) {
+        QJsonArray tagsArr = obj["tags"].toArray();
+        for (const auto &val : tagsArr) {
+            item.tags.append(val.toString());
+        }
+    }
+    
     return item;
 }
