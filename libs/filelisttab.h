@@ -4,6 +4,7 @@
 #include <QWidget>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
+#include <QComboBox>
 #include <QHeaderView>
 #include <QMenu>
 #include <QAction>
@@ -27,21 +28,27 @@ signals:
     void scanRequested(const QString &path);
     void requestAddGame(const GameItem &item);
 
+private:
+    void setMainUI();
+    QTreeWidget *mainTree;
+    QComboBox *typeFilterCombo;
+    int currentFilterType = -1; // -1 for All
+    
+    void filterItems(QTreeWidgetItem *item); // Recursive logic helper
+    
+    // Helper to find parent items quickly.
+    // Key: Absolute Path of the folder
+    // Value: Pointer to QTreeWidgetItem
+    QMap<QString, QTreeWidgetItem*> itemMap;
+
 private slots:
+    void onTypeFilterChanged(int index);
     void showContextMenu(const QPoint &pos);
     void openFileLocation();
     void renameFolder();
     void onItemExpanded(QTreeWidgetItem *item);
     void onDoubleClicked(QTreeWidgetItem *item, int column);
 
-private:
-    void setMainUI();
-    QTreeWidget *mainTree;
-    
-    // Helper to find parent items quickly.
-    // Key: Absolute Path of the folder
-    // Value: Pointer to QTreeWidgetItem
-    QMap<QString, QTreeWidgetItem*> itemMap;
 };
 
 #endif

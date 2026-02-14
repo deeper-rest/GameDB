@@ -53,7 +53,8 @@ void GameInfoDialog::setupUI() {
     
     int index = this->typeCombo->findData(static_cast<int>(this->item.type));
     if (index != -1) this->typeCombo->setCurrentIndex(index);
-    this->typeCombo->setEnabled(false);
+    // User requested to fix detection issues by allowing manual edit
+    this->typeCombo->setEnabled(true);
     
     typeLayout->addWidget(typeLabel);
     typeLayout->addWidget(this->typeCombo);
@@ -188,6 +189,7 @@ void GameInfoDialog::onCaptureFailed(const QString &reason) {
 void GameInfoDialog::save() {
     this->item.cleanName = this->nameEdit->text();
     this->item.folderName = this->folderNameEdit->text();
+    this->item.type = static_cast<GameType>(this->typeCombo->currentData().toInt());
     this->item.koreanSupport = this->koreanCheck->isChecked();
     this->item.exePath = this->exePathEdit->text();
     

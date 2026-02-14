@@ -11,6 +11,7 @@
 #include <QUrl>
 #include <QFileInfo>
 #include <QMessageBox>
+#include <QComboBox>
 #include "gamemanager.h"
 
 class GameListTab : public QWidget {
@@ -30,11 +31,13 @@ private slots:
     void onRowClicked(int row, int column);
     void runGame(QString exePath);
     void openGameFolder(QString path);
+    void onTypeFilterChanged(int index);
 
 private:
     void setupUI();
     
     QLineEdit *searchEdit;
+    QComboBox *typeFilterCombo;
     QTableWidget *gameTable;
     int expandedRow;
 };

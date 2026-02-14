@@ -8,6 +8,7 @@
 #include <QMessageBox>
 #include <QFileInfo>
 #include <QProcess>
+#include <QComboBox>
 
 GameListTab::GameListTab() {
     setupUI();
@@ -19,11 +20,27 @@ GameListTab::GameListTab() {
 void GameListTab::setupUI() {
     QVBoxLayout *layout = new QVBoxLayout(this);
     
+    // Top Bar (Search + Filter)
+    QHBoxLayout *topLayout = new QHBoxLayout();
+    
     // Search
     this->searchEdit = new QLineEdit();
     this->searchEdit->setPlaceholderText(tr("Search games..."));
     connect(this->searchEdit, &QLineEdit::textChanged, this, &GameListTab::onSearchChanged);
-    layout->addWidget(this->searchEdit);
+    topLayout->addWidget(this->searchEdit);
+    
+    // Type Filter
+    this->typeFilterCombo = new QComboBox();
+    this->typeFilterCombo->addItem("All Types", -1);
+    this->typeFilterCombo->addItem("Folder", static_cast<int>(GameType::Folder));
+    this->typeFilterCombo->addItem("Zip", static_cast<int>(GameType::Zip));
+    this->typeFilterCombo->addItem("7z", static_cast<int>(GameType::SevenZip));
+    this->typeFilterCombo->addItem("Rar", static_cast<int>(GameType::Rar));
+    this->typeFilterCombo->addItem("Iso", static_cast<int>(GameType::Iso));
+    connect(this->typeFilterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &GameListTab::onTypeFilterChanged);
+    topLayout->addWidget(this->typeFilterCombo);
+    
+    layout->addLayout(topLayout);
     
     // Table
     this->gameTable = new QTableWidget();
@@ -48,10 +65,19 @@ void GameListTab::refreshList() {
     this->expandedRow = -1; // Reset expansion on refresh
     QList<GameItem> games = GameManager::instance().getGames();
     QString filter = this->searchEdit->text().toLower();
+    int infoTypeData = this->typeFilterCombo->currentData().toInt();
     
     for (const auto &game : games) {
+        // Name Filter
         if (!filter.isEmpty() && !game.cleanName.toLower().contains(filter) && !game.folderName.toLower().contains(filter)) {
             continue;
+        }
+        
+        // Type Filter
+        if (infoTypeData != -1) {
+            if (static_cast<int>(game.type) != infoTypeData) {
+                continue;
+            }
         }
         
         int row = this->gameTable->rowCount();
@@ -89,6 +115,11 @@ void GameListTab::refreshList() {
 }
 
 void GameListTab::onSearchChanged(const QString &text) {
+    refreshList();
+}
+
+void GameListTab::onTypeFilterChanged(int index) {
+    Q_UNUSED(index);
     refreshList();
 }
 

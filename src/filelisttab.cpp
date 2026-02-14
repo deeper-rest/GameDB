@@ -3,10 +3,64 @@
 #include <QInputDialog>
 #include <QMessageBox>
 #include <QFileInfo>
+#include <QComboBox>
 #include <QDir>
 
 FileListTab::FileListTab() {
     setMainUI();
+}
+
+void FileListTab::onTypeFilterChanged(int index) {
+    Q_UNUSED(index);
+    this->currentFilterType = this->typeFilterCombo->currentData().toInt();
+    
+    // Apply filter to all root items
+    for (int i = 0; i < this->mainTree->topLevelItemCount(); ++i) {
+        filterItems(this->mainTree->topLevelItem(i));
+    }
+}
+
+void FileListTab::filterItems(QTreeWidgetItem *item) {
+    // Always show the dummy "Loading..." item to allow expansion
+    if (item->text(0) == "Loading...") {
+        item->setHidden(false);
+        return;
+    }
+
+    // Determine visibility
+    // Logic: Folders are ALWAYS visible to allow navigation.
+    // Files are visible if filter is All (-1) OR type matches.
+    // Need to parse type from column 1 text or store data?
+    // Storing data is better but text parsing is easier given current structure.
+    QString typeStr = item->text(1);
+    bool isFolder = (typeStr == "Folder");
+    
+    bool visible = true;
+    if (this->currentFilterType != -1) {
+        // Strict filtering: Only show if type matches exactly
+        // This means if "Zip" is selected, Folders will be hidden (and thus their children).
+        // User explicitly requested NOT to always show folders.
+        
+        GameType targetType = static_cast<GameType>(this->currentFilterType);
+        bool match = false;
+        
+        switch(targetType) {
+            case GameType::Folder: match = (typeStr == "Folder"); break;
+            case GameType::Zip: match = (typeStr == "Zip"); break;
+            case GameType::SevenZip: match = (typeStr == "7z"); break;
+            case GameType::Rar: match = (typeStr == "Rar"); break;
+            case GameType::Iso: match = (typeStr == "Iso"); break;
+            default: match = false; break;
+        }
+        visible = match;
+    }
+    
+    item->setHidden(!visible);
+    
+    // Recurse for children
+    for (int i = 0; i < item->childCount(); ++i) {
+        filterItems(item->child(i));
+    }
 }
 
 void FileListTab::setMainUI() {
@@ -16,13 +70,24 @@ void FileListTab::setMainUI() {
     this->mainTree->header()->setSectionResizeMode(0, QHeaderView::Stretch);
     this->mainTree->setContextMenuPolicy(Qt::CustomContextMenu);
     this->mainTree->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    this->mainTree->setSortingEnabled(true); // Enable User Sorting
     
     // IMPORTANT: Connect expanded signal for lazy loading
     connect(this->mainTree, &QTreeWidget::itemExpanded, this, &FileListTab::onItemExpanded);
     connect(this->mainTree, &QTreeWidget::customContextMenuRequested, this, &FileListTab::showContextMenu);
     connect(this->mainTree, &QTreeWidget::itemDoubleClicked, this, &FileListTab::onDoubleClicked);
 
+    this->typeFilterCombo = new QComboBox();
+    this->typeFilterCombo->addItem("All Types", -1);
+    this->typeFilterCombo->addItem("Folder", static_cast<int>(GameType::Folder));
+    this->typeFilterCombo->addItem("Zip", static_cast<int>(GameType::Zip));
+    this->typeFilterCombo->addItem("7z", static_cast<int>(GameType::SevenZip));
+    this->typeFilterCombo->addItem("Rar", static_cast<int>(GameType::Rar));
+    this->typeFilterCombo->addItem("Iso", static_cast<int>(GameType::Iso));
+    connect(this->typeFilterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &FileListTab::onTypeFilterChanged);
+
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
+    mainLayout->addWidget(this->typeFilterCombo);
     mainLayout->addWidget(this->mainTree);
     mainLayout->setContentsMargins(0,0,0,0);
     mainLayout->setSpacing(0);
@@ -72,6 +137,9 @@ void FileListTab::addGameItem(const GameItem &item) {
         // Add a dummy child to make it expandable (Lazy Load)
         new QTreeWidgetItem(newItem, QStringList() << "Loading...");
     }
+    
+    // Apply initial filter visibility
+    filterItems(newItem);
 }
 
 void FileListTab::clearItems() {
