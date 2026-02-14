@@ -50,6 +50,17 @@ void GameManager::addGame(const GameItem &item) {
     saveGames();
 }
 
+void GameManager::updateGame(const GameItem &item) {
+    for (int i = 0; i < this->library.size(); ++i) {
+        if (this->library[i].filePath == item.filePath) {
+            this->library[i] = item;
+            emit libraryUpdated();
+            saveGames();
+            return;
+        }
+    }
+}
+
 void GameManager::removeGame(int index) {
     if (index >= 0 && index < this->library.size()) {
         QString path = this->library[index].filePath;

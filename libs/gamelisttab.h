@@ -32,6 +32,7 @@ private slots:
     void runGame(QString exePath);
     void openGameFolder(QString path);
     void onTypeFilterChanged(int index);
+    void onEditGameRequested(QString path);
 
 private:
     void setupUI();

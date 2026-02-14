@@ -17,10 +17,12 @@ public:
 signals:
     void playGame(QString exePath);
     void openFolder(QString path);
+    void requestEdit(QString path);
 
 private slots:
     void onPlayClicked();
     void onOpenClicked();
+    void onEditClicked();
 
 private:
     void setupUI();
@@ -30,6 +32,7 @@ private:
     QLabel *infoLabel;
     QPushButton *playButton;
     QPushButton *openButton;
+    QPushButton *editButton;
 };
 
 #endif // GAMEDETAILWIDGET_H

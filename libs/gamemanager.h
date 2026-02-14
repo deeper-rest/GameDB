@@ -18,6 +18,7 @@ public:
     static GameManager& instance();
 
     void addGame(const GameItem &item);
+    void updateGame(const GameItem &item);
     void removeGame(int index);
     void removeGameByPath(const QString &path);
     QList<GameItem> getGames() const;

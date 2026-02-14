@@ -1,5 +1,6 @@
 #include "gamelisttab.h"
 #include "gamedetailwidget.h"
+#include "gameinfodialog.h"
 #include <QVBoxLayout>
 #include <QHeaderView>
 #include <QMenu>
@@ -203,6 +204,7 @@ void GameListTab::onRowClicked(int row, int column) {
     GameDetailWidget *detail = new GameDetailWidget(item);
     connect(detail, &GameDetailWidget::playGame, this, &GameListTab::runGame);
     connect(detail, &GameDetailWidget::openFolder, this, &GameListTab::openGameFolder);
+    connect(detail, &GameDetailWidget::requestEdit, this, &GameListTab::onEditGameRequested);
     
     this->gameTable->setCellWidget(row + 1, 0, detail);
     
@@ -229,4 +231,18 @@ void GameListTab::openGameFolder(QString path) {
     if (info.isDir()) openPath = info.absoluteFilePath();
     
     QDesktopServices::openUrl(QUrl::fromLocalFile(openPath));
+}
+
+void GameListTab::onEditGameRequested(QString path) {
+    GameItem item = GameManager::instance().getGameByPath(path);
+    if (item.filePath.isEmpty()) return;
+    
+    // Include GameInfoDialog header if not already included? 
+    // It's likely needed. Let's assume it is or add it.
+    // Wait, need to check includes.
+    
+    GameInfoDialog dialog(item, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        GameManager::instance().updateGame(dialog.getGameItem());
+    }
 }

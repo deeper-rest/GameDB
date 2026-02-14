@@ -59,11 +59,16 @@ void GameDetailWidget::setupUI() {
     this->openButton = new QPushButton(tr("📂 Open Folder"));
     this->openButton->setMinimumHeight(40);
     
+    this->editButton = new QPushButton(tr("✎ Edit"));
+    this->editButton->setMinimumHeight(40);
+    
     connect(this->playButton, &QPushButton::clicked, this, &GameDetailWidget::onPlayClicked);
     connect(this->openButton, &QPushButton::clicked, this, &GameDetailWidget::onOpenClicked);
+    connect(this->editButton, &QPushButton::clicked, this, &GameDetailWidget::onEditClicked);
     
     btnLayout->addWidget(this->playButton);
     btnLayout->addWidget(this->openButton);
+    btnLayout->addWidget(this->editButton);
     btnLayout->addStretch();
     
     rightLayout->addLayout(btnLayout);
@@ -83,4 +88,8 @@ void GameDetailWidget::onPlayClicked() {
 
 void GameDetailWidget::onOpenClicked() {
     emit openFolder(this->item.filePath);
+}
+
+void GameDetailWidget::onEditClicked() {
+    emit requestEdit(this->item.filePath);
 }
