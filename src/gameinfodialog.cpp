@@ -165,7 +165,11 @@ void GameInfoDialog::onCaptureClicked() {
     
     this->saveButton->setEnabled(false);
     this->imagePreview->setText("Capturing...");
-    this->thumbManager->startCapture(exe, this->delaySpin->value());
+    
+    QString name = this->nameEdit->text();
+    if (name.isEmpty()) name = this->item.cleanName;
+    
+    this->thumbManager->startCapture(exe, name, this->delaySpin->value());
 }
 
 void GameInfoDialog::onCaptureFinished(const QString &path) {
@@ -186,9 +190,8 @@ void GameInfoDialog::save() {
     this->item.folderName = this->folderNameEdit->text();
     this->item.koreanSupport = this->koreanCheck->isChecked();
     this->item.exePath = this->exePathEdit->text();
-    // thumbnailPath is already updated in item via onCaptureFinished, 
-    // BUT what if we want to allow manual browsing later? 
-    // needed: manual browse for image. But for now, Auto Capture is the request.
+    
+    qDebug() << "Saving GameItem. Thumbnail:" << this->item.thumbnailPath;
     
     this->item.tags.clear();
     for (int i = 0; i < this->tagList->count(); ++i) {

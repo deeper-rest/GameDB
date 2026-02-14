@@ -25,6 +25,7 @@ void GameListTab::setupUI() {
     this->gameTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     this->gameTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     this->gameTable->setContextMenuPolicy(Qt::CustomContextMenu);
+    this->gameTable->setIconSize(QSize(48, 48)); // Set icon size
     
     connect(this->gameTable, &QTableWidget::cellDoubleClicked, this, &GameListTab::onDoubleClicked);
     connect(this->gameTable, &QTableWidget::customContextMenuRequested, this, &GameListTab::showContextMenu);
@@ -45,7 +46,12 @@ void GameListTab::refreshList() {
         int row = this->gameTable->rowCount();
         this->gameTable->insertRow(row);
         
-        this->gameTable->setItem(row, 0, new QTableWidgetItem(game.cleanName));
+        QTableWidgetItem *nameItem = new QTableWidgetItem(game.cleanName);
+        if (!game.thumbnailPath.isEmpty() && QFile::exists(game.thumbnailPath)) {
+            QIcon icon(game.thumbnailPath);
+            nameItem->setIcon(icon);
+        }
+        this->gameTable->setItem(row, 0, nameItem);
         this->gameTable->setItem(row, 1, new QTableWidgetItem(game.folderName));
         
         QString typeStr;

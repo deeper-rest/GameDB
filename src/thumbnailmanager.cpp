@@ -8,6 +8,7 @@
 #include <QFileInfo>
 #include <windows.h>
 #include <QWindow>
+#include <QRegularExpression>
 
 ThumbnailManager::ThumbnailManager(QObject *parent) : QObject(parent) {
     this->process = new QProcess(this);
@@ -24,13 +25,14 @@ ThumbnailManager::~ThumbnailManager() {
     }
 }
 
-void ThumbnailManager::startCapture(const QString &exePath, int delaySec) {
+void ThumbnailManager::startCapture(const QString &exePath, const QString &gameName, int delaySec) {
     if (exePath.isEmpty()) {
         emit captureFailed("Executable path is empty.");
         return;
     }
     
     this->currentExePath = exePath;
+    this->currentGameName = gameName;
     
     QFileInfo info(exePath);
     this->process->setProgram(exePath);
@@ -133,7 +135,14 @@ void ThumbnailManager::doCapture(qint64 pid, WId windowId) {
     }
     
     // Cleanup process after capture attempt
-    this->process->terminate();
+    // Force kill using taskkill for robust termination on Windows
+    QString pidStr = QString::number(pid);
+    QProcess::execute("taskkill", QStringList() << "/F" << "/PID" << pidStr);
+    
+    // Fallback/Cleanup internal state
+    if (this->process->state() != QProcess::NotRunning) {
+        this->process->kill();
+    }
 }
 
 QString ThumbnailManager::saveThumbnail(const QPixmap &pixmap) {
@@ -143,7 +152,11 @@ QString ThumbnailManager::saveThumbnail(const QPixmap &pixmap) {
         dir.mkdir("thumbnails");
     }
     
-    QString filename = QString("thumb_%1.png").arg(QDateTime::currentMSecsSinceEpoch());
+    QString safeName = this->currentGameName;
+    safeName.replace(QRegularExpression("[^a-zA-Z0-9_]"), "_"); // Sanitize
+    if (safeName.isEmpty()) safeName = "game";
+    
+    QString filename = QString("%1_thumbnail.png").arg(safeName);
     QString fullPath = dir.filePath("thumbnails/" + filename);
     
     if (pixmap.save(fullPath, "PNG")) {

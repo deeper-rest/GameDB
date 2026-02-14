@@ -14,7 +14,7 @@ public:
     explicit ThumbnailManager(QObject *parent = nullptr);
     ~ThumbnailManager();
     
-    void startCapture(const QString &exePath, int delaySec);
+    void startCapture(const QString &exePath, const QString &gameName, int delaySec);
 
 signals:
     void captureFinished(const QString &imagePath);
@@ -28,6 +28,7 @@ private:
     QProcess *process;
     QTimer *timer;
     QString currentExePath;
+    QString currentGameName;
     
     void captureWindow(qint64 pid);
     void doCapture(qint64 pid, WId windowId);
