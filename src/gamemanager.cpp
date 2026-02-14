@@ -144,6 +144,8 @@ QJsonObject GameManager::gameToJson(const GameItem &item) {
     
     obj["koreanSupport"] = item.koreanSupport;
     obj["folderName"] = item.folderName;
+    obj["source"] = item.source;
+    obj["gameCode"] = item.gameCode;
     
     QJsonArray tagsArr;
     for (const QString &t : item.tags) tagsArr.append(t);
@@ -164,6 +166,8 @@ GameItem GameManager::jsonToGame(const QJsonObject &obj) {
     
     item.koreanSupport = obj["koreanSupport"].toBool();
     item.folderName = obj["folderName"].toString();
+    item.source = obj["source"].toString();
+    item.gameCode = obj["gameCode"].toString();
     item.thumbnailPath = obj["thumbnailPath"].toString();
     item.exePath = obj["exePath"].toString();
     

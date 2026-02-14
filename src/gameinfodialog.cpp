@@ -1,4 +1,5 @@
 #include "gameinfodialog.h"
+#include <QMimeData>
 
 GameInfoDialog::GameInfoDialog(const GameItem &item, QWidget *parent) 
     : QDialog(parent), item(item) {
@@ -8,6 +9,10 @@ GameInfoDialog::GameInfoDialog(const GameItem &item, QWidget *parent)
 
 void GameInfoDialog::setupUI() {
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
+
+    // Shortcut for Paste
+    QShortcut *pasteShortcut = new QShortcut(QKeySequence::Paste, this);
+    connect(pasteShortcut, &QShortcut::activated, this, &GameInfoDialog::onPasteThumbnail);
 
     // Name
     QHBoxLayout *nameLayout = new QHBoxLayout();
@@ -119,6 +124,52 @@ void GameInfoDialog::setupUI() {
     thumbLayout->addWidget(this->imagePreview, 0, Qt::AlignCenter);
     thumbLayout->addLayout(capLayout);
     mainLayout->addWidget(thumbBox);
+    
+    // --- Advanced Section (Manual Upload & Metadata) ---
+    this->toggleAdvancedBtn = new QPushButton(tr("▶ Advanced / Manual Upload"));
+    this->toggleAdvancedBtn->setCheckable(true);
+    this->toggleAdvancedBtn->setStyleSheet("text-align: left; font-weight: bold;");
+    connect(this->toggleAdvancedBtn, &QPushButton::clicked, this, &GameInfoDialog::onToggleAdvanced);
+    mainLayout->addWidget(this->toggleAdvancedBtn);
+    
+    this->advancedBox = new QGroupBox();
+    this->advancedBox->setVisible(false);
+    QVBoxLayout *advLayout = new QVBoxLayout(this->advancedBox);
+    
+    // Source & Code
+    QHBoxLayout *metaLayout = new QHBoxLayout();
+    
+    // Source
+    metaLayout->addWidget(new QLabel(tr("Source:")));
+    this->sourceCombo = new QComboBox();
+    this->sourceCombo->addItems(QStringList() << "Other" << "Steam" << "DLsite" << "DMM" << "GOG");
+    this->sourceCombo->setCurrentText(this->item.source.isEmpty() ? "Other" : this->item.source);
+    this->sourceCombo->setEditable(true); // Allow custom
+    metaLayout->addWidget(this->sourceCombo);
+    
+    // Game Code
+    metaLayout->addWidget(new QLabel(tr("Code:")));
+    this->gameCodeEdit = new QLineEdit(this->item.gameCode);
+    this->gameCodeEdit->setPlaceholderText("e.g. RJ123456");
+    metaLayout->addWidget(this->gameCodeEdit);
+    
+    advLayout->addLayout(metaLayout);
+    
+    // Manual Thumbnail
+    QHBoxLayout *manualThumbLayout = new QHBoxLayout();
+    this->btnBrowseThumb = new QPushButton(tr("Browse Image..."));
+    this->btnPasteThumb = new QPushButton(tr("Paste from Clipboard (Ctrl+V)"));
+    // Add shortcut hint tooltip
+    this->btnPasteThumb->setToolTip(tr("Paste image from clipboard"));
+    
+    connect(this->btnBrowseThumb, &QPushButton::clicked, this, &GameInfoDialog::onBrowseThumbnail);
+    connect(this->btnPasteThumb, &QPushButton::clicked, this, &GameInfoDialog::onPasteThumbnail);
+    
+    manualThumbLayout->addWidget(this->btnBrowseThumb);
+    manualThumbLayout->addWidget(this->btnPasteThumb);
+    advLayout->addLayout(manualThumbLayout);
+    
+    mainLayout->addWidget(this->advancedBox);
 
     // Buttons
     QHBoxLayout *btnLayout = new QHBoxLayout();
@@ -186,12 +237,73 @@ void GameInfoDialog::onCaptureFailed(const QString &reason) {
     QMessageBox::critical(this, tr("Capture Failed"), reason);
 }
 
+void GameInfoDialog::onToggleAdvanced() {
+    bool visible = this->toggleAdvancedBtn->isChecked();
+    this->advancedBox->setVisible(visible);
+    this->toggleAdvancedBtn->setText(visible ? tr("▼ Advanced / Manual Upload") : tr("▶ Advanced / Manual Upload"));
+}
+
+void GameInfoDialog::onBrowseThumbnail() {
+    QString path = QFileDialog::getOpenFileName(this, tr("Select Thumbnail"), "", "Images (*.png *.jpg *.jpeg *.bmp)");
+    if (!path.isEmpty()) {
+        this->item.thumbnailPath = path;
+        updateThumbnailPreview();
+    }
+}
+
+void GameInfoDialog::onPasteThumbnail() {
+    QClipboard *clipboard = QGuiApplication::clipboard();
+    const QMimeData *mime = clipboard->mimeData();
+    
+    if (mime->hasImage()) {
+        QPixmap pix = qvariant_cast<QPixmap>(mime->imageData());
+        if (!pix.isNull()) {
+            // Save to file
+            QString name = this->item.cleanName;
+            // Sanitize name
+            static QRegularExpression re("[\\\\/:*?\"<>|]");
+            name.replace(re, "");
+            name = name.simplified().replace(" ", "_");
+            if (name.isEmpty()) name = "game";
+            
+            QString fileName = QString("%1_thumb_manual.png").arg(name);
+            QString saveLocation = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+            QDir dir(saveLocation);
+            // Ensure thumbnails dir? Just put in root of AppData for now or create subfolder.
+            // Following existing pattern (ThumbnailManager seems to use SaveLocation directly or passed path).
+            // Let's use same dir as games.json
+            
+            QString fullPath = dir.filePath(fileName);
+            if (pix.save(fullPath, "PNG")) {
+                this->item.thumbnailPath = fullPath;
+                updateThumbnailPreview();
+                QMessageBox::information(this, tr("Success"), tr("Image pasted and saved."));
+            } else {
+                QMessageBox::warning(this, tr("Error"), tr("Failed to save pasted image."));
+            }
+        }
+    } else {
+        QMessageBox::information(this, tr("Info"), tr("No image in clipboard."));
+    }
+}
+
+// Override keyPressEvent to handle Ctrl+V?
+// Or just let button do it.
+// Let's add keyPressEvent logic to the class in a separate edit if needed.
+// For now, rely on button.
+
 void GameInfoDialog::save() {
     this->item.cleanName = this->nameEdit->text();
     this->item.folderName = this->folderNameEdit->text();
     this->item.type = static_cast<GameType>(this->typeCombo->currentData().toInt());
     this->item.koreanSupport = this->koreanCheck->isChecked();
     this->item.exePath = this->exePathEdit->text();
+    
+    // Extended Metadata
+    if (this->sourceCombo) {
+        this->item.source = this->sourceCombo->currentText();
+        this->item.gameCode = this->gameCodeEdit->text();
+    }
     
     qDebug() << "Saving GameItem. Thumbnail:" << this->item.thumbnailPath;
     

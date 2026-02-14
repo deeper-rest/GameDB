@@ -22,6 +22,8 @@ struct GameItem {
     bool koreanSupport = false;
     QString folderName; // Folder name or File name without path
     QStringList tags;
+    QString source; // e.g. "DLsite", "Steam"
+    QString gameCode; // e.g. "RJ123456"
     
     // Thumbnail & Launch
     QString thumbnailPath;

@@ -13,11 +13,16 @@
 #include <QFileDialog>
 #include <QGroupBox>
 #include <QMessageBox>
+#include <QShortcut>
+#include <QKeySequence>
 
 #include "gamedata.h"
 #include "tagmanager.h"
 #include "thumbnailmanager.h"
 #include <QSpinBox>
+#include <QClipboard>
+#include <QGuiApplication>
+#include <QBuffer>
 
 class GameInfoDialog : public QDialog {
     Q_OBJECT
@@ -32,6 +37,9 @@ private slots:
     void onBrowseExeClicked();
     void onCaptureFinished(const QString &path);
     void onCaptureFailed(const QString &reason);
+    void onToggleAdvanced();
+    void onBrowseThumbnail();
+    void onPasteThumbnail();
 
 private:
     void setupUI();
@@ -53,6 +61,14 @@ private:
     
     QPushButton *saveButton;
     QPushButton *cancelButton;
+
+    // Advanced
+    QGroupBox *advancedBox;
+    QPushButton *toggleAdvancedBtn;
+    QComboBox *sourceCombo;
+    QLineEdit *gameCodeEdit;
+    QPushButton *btnBrowseThumb;
+    QPushButton *btnPasteThumb;
 };
 
 #endif // GAMEINFODIALOG_H
