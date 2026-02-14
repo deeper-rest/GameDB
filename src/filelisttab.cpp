@@ -20,6 +20,7 @@ void FileListTab::setMainUI() {
     // IMPORTANT: Connect expanded signal for lazy loading
     connect(this->mainTree, &QTreeWidget::itemExpanded, this, &FileListTab::onItemExpanded);
     connect(this->mainTree, &QTreeWidget::customContextMenuRequested, this, &FileListTab::showContextMenu);
+    connect(this->mainTree, &QTreeWidget::itemDoubleClicked, this, &FileListTab::onDoubleClicked);
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->addWidget(this->mainTree);
@@ -161,4 +162,26 @@ void FileListTab::renameFolder() {
             QMessageBox::critical(this, "Error", "Failed to rename folder.\nCheck permissions or if folder is in use.");
         }
     }
+}
+
+void FileListTab::onDoubleClicked(QTreeWidgetItem *item, int column) {
+    Q_UNUSED(column);
+    if (!item) return;
+    
+    // Construct GameItem from tree item
+    GameItem gameItem;
+    gameItem.cleanName = item->text(0);
+    gameItem.originalName = item->text(2);
+    gameItem.filePath = item->text(3);
+    
+    QString typeStr = item->text(1);
+    GameType type = GameType::Unknown;
+    if (typeStr == "Folder") type = GameType::Folder;
+    else if (typeStr == "Zip") type = GameType::Zip;
+    else if (typeStr == "7z") type = GameType::SevenZip;
+    else if (typeStr == "Rar") type = GameType::Rar;
+    else if (typeStr == "Iso") type = GameType::Iso;
+    gameItem.type = type;
+
+    emit requestAddGame(gameItem);
 }

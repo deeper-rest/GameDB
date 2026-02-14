@@ -65,6 +65,7 @@ void MainWindow::setMainTabUI() {
     this->mainTabWidget->setStyleSheet(MAINTAB_STYLESHEET);
 
     this->fileListTab = new FileListTab();
+    this->gameListTab = new GameListTab();
     
     // Forward the signal from tab to scanner (Wait, we did this in constructor? NO. fileListTab didn't exist in constructor before setMainUI call)
     // Actually, `setMainUI` creates `fileListTab`.
@@ -72,7 +73,9 @@ void MainWindow::setMainTabUI() {
     // So the pointer is valid.
     
     this->mainTabWidget->addTab(this->fileListTab, tr("파일/폴더 목록"));
-    this->mainTabWidget->addTab(new QWidget(), "Test2");
+    this->mainTabWidget->addTab(this->gameListTab, tr("게임 목록"));
+    
+    connect(this->fileListTab, &FileListTab::requestAddGame, this, &MainWindow::showGameInfoDialog);
 }
 
 void MainWindow::getDirPath() {
@@ -99,4 +102,11 @@ void MainWindow::onGameFound(GameItem item) {
 void MainWindow::onScanFinished() {
     // Scan finished
     // We can update UI status here if we had a status bar
+}
+
+void MainWindow::showGameInfoDialog(const GameItem &item) {
+    GameInfoDialog dialog(item, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        GameManager::instance().addGame(dialog.getGameItem());
+    }
 }

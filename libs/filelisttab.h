@@ -25,12 +25,14 @@ public:
 
 signals:
     void scanRequested(const QString &path);
+    void requestAddGame(const GameItem &item);
 
 private slots:
     void showContextMenu(const QPoint &pos);
     void openFileLocation();
     void renameFolder();
     void onItemExpanded(QTreeWidgetItem *item);
+    void onDoubleClicked(QTreeWidgetItem *item, int column);
 
 private:
     void setMainUI();
