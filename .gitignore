@@ -103,3 +103,4 @@ saves/
 CMakeFiles/
 *_autogen/
 .qt/
+.agent/

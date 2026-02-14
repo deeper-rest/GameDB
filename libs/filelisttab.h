@@ -2,10 +2,17 @@
 #define FILELISTTAB_H
 
 #include <QWidget>
-#include <QPushButton>
-#include <QListWidget>
-#include <QList>
+#include <QTreeWidget>
+#include <QTreeWidgetItem>
 #include <QHeaderView>
+#include <QMenu>
+#include <QAction>
+#include <QProcess>
+#include <QDesktopServices>
+#include <QUrl>
+#include <QDebug>
+#include <QMap>
+#include "gamedata.h"
 
 class FileListTab : public QWidget {
     Q_OBJECT
@@ -13,12 +20,26 @@ class FileListTab : public QWidget {
 public:
     FileListTab();
 
-    void addItems(QStringList list);
+    void addGameItem(const GameItem &item);
+    void clearItems();
+
+signals:
+    void scanRequested(const QString &path);
+
+private slots:
+    void showContextMenu(const QPoint &pos);
+    void openFileLocation();
+    void renameFolder();
+    void onItemExpanded(QTreeWidgetItem *item);
 
 private:
     void setMainUI();
-
-    QListWidget *mainList;
+    QTreeWidget *mainTree;
+    
+    // Helper to find parent items quickly.
+    // Key: Absolute Path of the folder
+    // Value: Pointer to QTreeWidgetItem
+    QMap<QString, QTreeWidgetItem*> itemMap;
 };
 
 #endif

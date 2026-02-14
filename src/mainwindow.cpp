@@ -1,8 +1,25 @@
 #include "mainwindow.h"
 
-
 MainWindow::MainWindow() {
     setMainUI();
+    
+    // Initialize Scanner and Thread
+    this->workerThread = new QThread(this);
+    this->scanner = new GameScanner();
+    this->scanner->moveToThread(this->workerThread);
+    
+    connect(this->workerThread, &QThread::finished, this->scanner, &QObject::deleteLater);
+    connect(this->scanner, &GameScanner::gameFound, this, &MainWindow::onGameFound);
+    connect(this->scanner, &GameScanner::scanFinished, this, &MainWindow::onScanFinished);
+    
+    // We connect signal from UI to Scanner in thread
+    // Connect scanRequested directly to scanner::scanDirectory (which is now a slot)
+    connect(this->fileListTab, &FileListTab::scanRequested, this->scanner, &GameScanner::scanDirectory);
+}
+
+MainWindow::~MainWindow() {
+    this->workerThread->quit();
+    this->workerThread->wait();
 }
 
 void MainWindow::setMainUI() {
@@ -48,21 +65,38 @@ void MainWindow::setMainTabUI() {
     this->mainTabWidget->setStyleSheet(MAINTAB_STYLESHEET);
 
     this->fileListTab = new FileListTab();
-
+    
+    // Forward the signal from tab to scanner (Wait, we did this in constructor? NO. fileListTab didn't exist in constructor before setMainUI call)
+    // Actually, `setMainUI` creates `fileListTab`.
+    // And `MainWindow` constructor calls `setMainUI` THEN connects.
+    // So the pointer is valid.
+    
     this->mainTabWidget->addTab(this->fileListTab, tr("파일/폴더 목록"));
     this->mainTabWidget->addTab(new QWidget(), "Test2");
 }
 
 void MainWindow::getDirPath() {
     this->dirPath = QFileDialog::getExistingDirectory(this, tr("폴더 선택"), "./", QFileDialog::ShowDirsOnly);
+    
+    if (this->dirPath.isEmpty()) return;
 
-    QStringList list;
-    foreach(QString item, QDir(this->dirPath).entryList(QDir::AllDirs)){
-        // qDebug() << item.absoluteFilePath();
-        if (item != "." && item != "..")
-            list << item;
+    // Clear existing
+    this->fileListTab->clearItems();
+
+    // Start Scan in Thread
+    // To invoke method on object in another thread safely:
+    QMetaObject::invokeMethod(this->scanner, "scanDirectory", Qt::QueuedConnection, Q_ARG(QString, this->dirPath));
+    
+    if (!this->workerThread->isRunning()) {
+        this->workerThread->start();
     }
-    // qDebug() << list;
-    this->fileListTab->addItems(list);
+}
 
+void MainWindow::onGameFound(GameItem item) {
+    this->fileListTab->addGameItem(item);
+}
+
+void MainWindow::onScanFinished() {
+    // Scan finished
+    // We can update UI status here if we had a status bar
 }
