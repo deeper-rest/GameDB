@@ -23,6 +23,7 @@
 #include <QClipboard>
 #include <QGuiApplication>
 #include <QBuffer>
+#include <QMimeData>
 
 class GameInfoDialog : public QDialog {
     Q_OBJECT

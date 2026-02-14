@@ -40,11 +40,16 @@ void GameDetailWidget::setupUI() {
     rightLayout->addWidget(titleLabel);
     
     // Metadata
-    QString infoText = QString("Type: %1\nFolder Name: %2\nKorean Support: %3\nTags: %4")
+    QString sourceStr = this->item.source.isEmpty() ? "X" : this->item.source;
+    QString codeStr = this->item.gameCode.isEmpty() ? "X" : this->item.gameCode;
+    
+    QString infoText = QString("Type: %1\nFolder Name: %2\nKorean Support: %3\nTags: %4\nSource: %5\nCode: %6")
         .arg(static_cast<int>(this->item.type)) // Simplified for now
         .arg(this->item.folderName)
         .arg(this->item.koreanSupport ? "O" : "X")
-        .arg(this->item.tags.join(", "));
+        .arg(this->item.tags.join(", "))
+        .arg(sourceStr)
+        .arg(codeStr);
     
     this->infoLabel = new QLabel(infoText);
     this->infoLabel->setStyleSheet("font-size: 14px; color: #333; margin-bottom: 20px;");
