@@ -1,4 +1,7 @@
 #include "filelisttab.h"
+#include "gamemanager.h"
+#include <QBrush>
+#include <QColor>
 #include <QVBoxLayout>
 #include <QInputDialog>
 #include <QMessageBox>
@@ -8,6 +11,9 @@
 
 FileListTab::FileListTab() {
     setMainUI();
+    
+    connect(&GameManager::instance(), &GameManager::gameAdded, this, &FileListTab::onGameAdded);
+    connect(&GameManager::instance(), &GameManager::gameRemoved, this, &FileListTab::onGameRemoved);
 }
 
 void FileListTab::onTypeFilterChanged(int index) {
@@ -140,6 +146,12 @@ void FileListTab::addGameItem(const GameItem &item) {
     
     // Apply initial filter visibility
     filterItems(newItem);
+    
+    // Check if already in library
+    GameItem existing = GameManager::instance().getGameByPath(item.filePath);
+    if (!existing.filePath.isEmpty()) {
+        updateItemHighlight(newItem, true);
+    }
 }
 
 void FileListTab::clearItems() {
@@ -252,4 +264,42 @@ void FileListTab::onDoubleClicked(QTreeWidgetItem *item, int column) {
     gameItem.type = type;
 
     emit requestAddGame(gameItem);
+}
+
+void FileListTab::updateItemHighlight(QTreeWidgetItem *item, bool isSaved) {
+    int columnCount = item->columnCount();
+    if (isSaved) {
+        // Light yellow background for saved games
+        QBrush highlightBrush(QColor(255, 255, 200)); 
+        for (int i = 0; i < columnCount; ++i) {
+            item->setBackground(i, highlightBrush);
+            item->setForeground(i, QBrush(Qt::black)); // Ensure text is readable
+        }
+        item->setToolTip(0, "Game already in library");
+    } else {
+        // Reset color - use default brush to respect theme
+        for (int i = 0; i < columnCount; ++i) {
+            item->setBackground(i, QBrush()); 
+            item->setForeground(i, QBrush());
+        }
+        item->setToolTip(0, "");
+    }
+}
+
+void FileListTab::onGameAdded(const GameItem &item) {
+    // We need to find the item in the tree.
+    // Iterating whole tree might be slow, but let's try finding by match.
+    // Since our tree structure is Folder -> File, native findItems might work if we search recursively.
+    
+    QList<QTreeWidgetItem*> items = this->mainTree->findItems(item.filePath, Qt::MatchExactly | Qt::MatchRecursive, 3);
+    for (auto *treeItem : items) {
+        updateItemHighlight(treeItem, true);
+    }
+}
+
+void FileListTab::onGameRemoved(const QString &path) {
+    QList<QTreeWidgetItem*> items = this->mainTree->findItems(path, Qt::MatchExactly | Qt::MatchRecursive, 3);
+    for (auto *treeItem : items) {
+        updateItemHighlight(treeItem, false);
+    }
 }

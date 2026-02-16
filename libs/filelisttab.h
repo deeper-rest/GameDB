@@ -28,6 +28,10 @@ signals:
     void scanRequested(const QString &path);
     void requestAddGame(const GameItem &item);
 
+public slots:
+    void onGameAdded(const GameItem &item);
+    void onGameRemoved(const QString &path);
+
 private:
     void setMainUI();
     QTreeWidget *mainTree;
@@ -35,6 +39,7 @@ private:
     int currentFilterType = -1; // -1 for All
     
     void filterItems(QTreeWidgetItem *item); // Recursive logic helper
+    void updateItemHighlight(QTreeWidgetItem *item, bool isSaved);
     
     // Helper to find parent items quickly.
     // Key: Absolute Path of the folder
