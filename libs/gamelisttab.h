@@ -36,12 +36,18 @@ private slots:
     // Sort Slots
     void onSortChanged(int index);
     void onSortOrderChanged();
+    void onHeaderClicked(int logicalIndex);
+    
+    // Tag Filter Slot
+    void onTagFilterChanged(int index);
+    void updateTagFilterCombo();
 
 private:
     void setupUI();
     
     QLineEdit *searchEdit;
     QComboBox *typeFilterCombo;
+    QComboBox *tagFilterCombo;
     QToolButton *viewToggleBtn;
     
     // Sorting

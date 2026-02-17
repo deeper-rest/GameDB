@@ -12,12 +12,16 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QLineEdit>
+#include "tagmanager.h"
 
 GameListTab::GameListTab() {
     setupUI();
     refreshList();
     
     connect(&GameManager::instance(), &GameManager::libraryUpdated, this, &GameListTab::refreshList);
+    connect(&TagManager::instance(), &TagManager::tagAdded, [&](const QString &){ updateTagFilterCombo(); });
+    connect(&TagManager::instance(), &TagManager::tagRemoved, [&](const QString &){ updateTagFilterCombo(); });
+    connect(&TagManager::instance(), &TagManager::tagRenamed, [&](const QString &, const QString &){ updateTagFilterCombo(); });
 }
 
 void GameListTab::setupUI() {
@@ -43,6 +47,13 @@ void GameListTab::setupUI() {
     connect(this->typeFilterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &GameListTab::onTypeFilterChanged);
     topLayout->addWidget(this->typeFilterCombo);
     
+    // Tag Filter
+    this->tagFilterCombo = new QComboBox();
+    this->tagFilterCombo->addItem("All Tags", "All");
+    updateTagFilterCombo();
+    connect(this->tagFilterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &GameListTab::onTagFilterChanged);
+    topLayout->addWidget(this->tagFilterCombo);
+    
     // View Toggle
     this->viewToggleBtn = new QToolButton();
     this->viewToggleBtn->setText("Card View");
@@ -53,7 +64,11 @@ void GameListTab::setupUI() {
     // Sort Combo
     this->sortCombo = new QComboBox();
     this->sortCombo->addItem("Name", 0);
-    this->sortCombo->addItem("Last Played", 1);
+    this->sortCombo->addItem("Folder Name", 1);
+    this->sortCombo->addItem("Type", 2);
+    this->sortCombo->addItem("Korean", 3);
+    this->sortCombo->addItem("Tags", 4);
+    this->sortCombo->addItem("Last Played", 5);
     connect(this->sortCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &GameListTab::onSortChanged);
     topLayout->addWidget(this->sortCombo);
     
@@ -61,6 +76,7 @@ void GameListTab::setupUI() {
     this->sortOrderBtn = new QToolButton();
     this->sortOrderBtn->setText("Asc"); // Default Asc for Name
     this->sortOrderBtn->setCheckable(true); // Checked = Desc? Or just toggle text/icon
+    this->sortOrderBtn->setFixedWidth(50); // Fixed Width for UI Stability
     connect(this->sortOrderBtn, &QToolButton::clicked, this, &GameListTab::onSortOrderChanged);
     topLayout->addWidget(this->sortOrderBtn);
 
@@ -78,6 +94,9 @@ void GameListTab::setupUI() {
     this->gameTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     this->gameTable->setContextMenuPolicy(Qt::CustomContextMenu);
     this->gameTable->setIconSize(QSize(48, 48)); // Set icon size
+    
+    // Enable Header Click
+    connect(this->gameTable->horizontalHeader(), &QHeaderView::sectionClicked, this, &GameListTab::onHeaderClicked);
     
     connect(this->gameTable, &QTableWidget::cellClicked, this, &GameListTab::onRowClicked);
     connect(this->gameTable, &QTableWidget::cellDoubleClicked, this, &GameListTab::onDoubleClicked);
@@ -110,6 +129,7 @@ void GameListTab::refreshList() {
     QList<GameItem> games = GameManager::instance().getGames();
     QString filter = this->searchEdit->text().toLower();
     int infoTypeData = this->typeFilterCombo->currentData().toInt();
+    QString tagFilter = this->tagFilterCombo->currentData().toString();
     
     // Filter First
     QList<GameItem> filteredGames;
@@ -124,22 +144,55 @@ void GameListTab::refreshList() {
                 continue;
             }
         }
+        // Tag Filter
+        if (tagFilter != "All") {
+            if (!game.tags.contains(tagFilter)) {
+                continue;
+            }
+        }
         filteredGames.append(game);
     }
     
     // Sort
     int sortIndex = this->sortCombo->currentIndex(); // 0: Name, 1: Last Played
-    bool ascending = !this->sortOrderBtn->isChecked(); // unchecked = Asc, checked = Desc? Let's check logic.
-    // Button Text says "Asc" or "Desc".
+    // Map table columns to sort index if needed, or use a separate sort state.
+    // Let's use sortCombo as the source of truth for "Type" of sort.
+    // If we click header, we should update sortCombo if possible, or support more sort types.
+    // Current Combo: Name(0), Last Played(1).
+    // Table Cols: Name(0), Folder(1), Type(2), Korean(3), Tags(4), LastPlayed(5), Path(6)
+    
+    // Extended Sort Logic
+    // We can use the column index directly for sorting if we extend the enum/logic.
+    // Let's rely on sortCombo's user data or just index for simple cases, 
+    // BUT since we want to support ALL columns, we need a member variable `currentSortColumn`?
+    // OR we just map visual columns to sort logic.
+    
+    // To keep it simple and sync with UI:
+    // If sortIndex is 0 (Name) -> Sort by Name
+    // If sortIndex is 1 (Last Played) -> Sort by Date
+    // What if user clicked "Folder"? There is no combo item for it.
+    // We should probably add items to combo OR just use internal state and update combo text to "Custom" or match if possible.
+    
+    // Let's add all columns to combo?
+    // 0: Name, 1: Folder, 2: Type, 3: Korean, 4: Tags, 5: Last Played.
+    // This requires updating setupUI. Let's do that first (in next step or assume done).
+    // For now, let's assume we update the combo to have all these.
+    
+    bool ascending = !this->sortOrderBtn->isChecked(); 
     
     std::sort(filteredGames.begin(), filteredGames.end(), [sortIndex, ascending](const GameItem &a, const GameItem &b) {
-        if (sortIndex == 1) { // Last Played
-            if (ascending) return a.lastPlayed < b.lastPlayed;
-            else return a.lastPlayed > b.lastPlayed;
-        } else { // Name (Default)
-            if (ascending) return a.cleanName < b.cleanName;
-            else return a.cleanName > b.cleanName;
-        }
+        // Sort Logic based on Index
+        // 0: Name, 1: Folder, 2: Type, 3: Korean, 4: Tags, 5: Last Played
+        bool result = false;
+        if (sortIndex == 0) result = a.cleanName < b.cleanName;
+        else if (sortIndex == 1) result = a.folderName < b.folderName;
+        else if (sortIndex == 2) result = static_cast<int>(a.type) < static_cast<int>(b.type);
+        else if (sortIndex == 3) result = a.koreanSupport < b.koreanSupport;
+        else if (sortIndex == 4) result = a.tags.join("") < b.tags.join(""); // Simplified tag sort
+        else if (sortIndex == 5) result = a.lastPlayed < b.lastPlayed;
+        else result = a.cleanName < b.cleanName;
+        
+        return ascending ? result : !result;
     });
 
     for (const auto &game : filteredGames) {        
@@ -209,6 +262,32 @@ void GameListTab::onTypeFilterChanged(int index) {
     refreshList();
 }
 
+void GameListTab::onTagFilterChanged(int index) {
+    Q_UNUSED(index);
+    refreshList();
+}
+
+void GameListTab::updateTagFilterCombo() {
+    QString current = this->tagFilterCombo->currentData().toString();
+    this->tagFilterCombo->blockSignals(true);
+    this->tagFilterCombo->clear();
+    this->tagFilterCombo->addItem("All Tags", "All");
+    
+    QStringList tags = TagManager::instance().getTags();
+    tags.sort(); // Sort tags alphabetically
+    
+    for (const QString &tag : tags) {
+        this->tagFilterCombo->addItem(tag, tag);
+    }
+    
+    // Restore selection if possible
+    int idx = this->tagFilterCombo->findData(current);
+    if (idx != -1) this->tagFilterCombo->setCurrentIndex(idx);
+    else this->tagFilterCombo->setCurrentIndex(0);
+    
+    this->tagFilterCombo->blockSignals(false);
+}
+
 void GameListTab::onSortChanged(int index) {
     Q_UNUSED(index);
     refreshList();
@@ -221,6 +300,26 @@ void GameListTab::onSortOrderChanged() {
         this->sortOrderBtn->setText("Asc");
     }
     refreshList();
+}
+
+void GameListTab::onHeaderClicked(int logicalIndex) {
+    if (logicalIndex < 0 || logicalIndex > 5) return; // Ignore Path column (6)
+    
+    // Check if we are already sorting by this column
+    if (this->sortCombo->currentIndex() == logicalIndex) {
+        // Toggle Order
+        this->sortOrderBtn->click(); // Simulate click to toggle state and refresh
+    } else {
+        // Change Column
+        // We need to ensure Sort Combo has items for 0..5
+        this->sortCombo->setCurrentIndex(logicalIndex);
+        // Default to Ascending when switching columns? Or keep?
+        // Let's keep current order or reset to Asc.
+        // Usually reset to Asc is standard.
+        if (this->sortOrderBtn->isChecked()) {
+            this->sortOrderBtn->click(); // Reset to Asc
+        }
+    }
 }
 
 void GameListTab::onDoubleClicked(int row, int column) {
