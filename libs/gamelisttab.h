@@ -3,15 +3,10 @@
 
 #include <QWidget>
 #include <QTableWidget>
-#include <QLineEdit>
-#include <QVBoxLayout>
-#include <QHeaderView>
-#include <QMenu>
-#include <QDesktopServices>
-#include <QUrl>
-#include <QFileInfo>
-#include <QMessageBox>
+#include <QListWidget>
+#include <QStackedWidget>
 #include <QComboBox>
+#include <QToolButton>
 #include "gamemanager.h"
 
 class GameListTab : public QWidget {
@@ -34,12 +29,21 @@ private slots:
     void onTypeFilterChanged(int index);
     void onEditGameRequested(QString path);
 
+    // Card View Slots
+    void onViewToggle();
+    void onCardClicked(QListWidgetItem *item);
+
 private:
     void setupUI();
     
     QLineEdit *searchEdit;
     QComboBox *typeFilterCombo;
+    QToolButton *viewToggleBtn;
+
+    QStackedWidget *viewStack;
     QTableWidget *gameTable;
+    QListWidget *gameListWidget;
+    
     int expandedRow;
 };
 

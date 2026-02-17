@@ -10,6 +10,8 @@
 #include <QFileInfo>
 #include <QProcess>
 #include <QComboBox>
+#include <QDialog>
+#include <QLineEdit>
 
 GameListTab::GameListTab() {
     setupUI();
@@ -41,8 +43,21 @@ void GameListTab::setupUI() {
     connect(this->typeFilterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &GameListTab::onTypeFilterChanged);
     topLayout->addWidget(this->typeFilterCombo);
     
+    // View Toggle
+    this->viewToggleBtn = new QToolButton();
+    this->viewToggleBtn->setText("Card"); // Button says what to switch TO (or current mode? usually toggle)
+    // Let's make it checkable: Unchecked = List, Checked = Card. Text can indicate current or target.
+    // Let's stick to text indicating the OTHER view, or Icons.
+    // Simple text for now: "Card View"
+    this->viewToggleBtn->setText("Card View");
+    this->viewToggleBtn->setCheckable(true);
+    connect(this->viewToggleBtn, &QToolButton::clicked, this, &GameListTab::onViewToggle);
+    topLayout->addWidget(this->viewToggleBtn);
+
     layout->addLayout(topLayout);
     
+    this->viewStack = new QStackedWidget();
+
     // Table
     this->gameTable = new QTableWidget();
     this->gameTable->setColumnCount(6); // Name, Folder Name, Type, Korean, Tags, Path
@@ -58,11 +73,29 @@ void GameListTab::setupUI() {
     connect(this->gameTable, &QTableWidget::cellDoubleClicked, this, &GameListTab::onDoubleClicked);
     connect(this->gameTable, &QTableWidget::customContextMenuRequested, this, &GameListTab::showContextMenu);
     
-    layout->addWidget(this->gameTable);
+    this->viewStack->addWidget(this->gameTable);
+    
+    // Card List
+    this->gameListWidget = new QListWidget();
+    this->gameListWidget->setViewMode(QListWidget::IconMode);
+    this->gameListWidget->setIconSize(QSize(320, 240)); // Adjusted Portrait size
+    this->gameListWidget->setResizeMode(QListWidget::Adjust);
+    this->gameListWidget->setGridSize(QSize(360, 260)); // Enforce grid cell size
+    this->gameListWidget->setMovement(QListView::Static);
+    this->gameListWidget->setSpacing(15);
+    this->gameListWidget->setUniformItemSizes(true);
+    this->gameListWidget->setWordWrap(true);
+    
+    connect(this->gameListWidget, &QListWidget::itemClicked, this, &GameListTab::onCardClicked);
+    this->viewStack->addWidget(this->gameListWidget);
+
+    layout->addWidget(this->viewStack);
 }
 
 void GameListTab::refreshList() {
     this->gameTable->setRowCount(0);
+    this->gameListWidget->clear();
+    
     this->expandedRow = -1; // Reset expansion on refresh
     QList<GameItem> games = GameManager::instance().getGames();
     QString filter = this->searchEdit->text().toLower();
@@ -112,6 +145,22 @@ void GameListTab::refreshList() {
         this->gameTable->setItem(row, 4, new QTableWidgetItem(game.tags.join(", ")));
         
         this->gameTable->setItem(row, 5, new QTableWidgetItem(game.filePath));
+        
+        // Add to List Widget
+        QListWidgetItem *listItem = new QListWidgetItem(game.cleanName);
+        if (!game.thumbnailPath.isEmpty() && QFile::exists(game.thumbnailPath)) {
+            listItem->setIcon(QIcon(game.thumbnailPath));
+        } else {
+            // Placeholder
+            QPixmap placeholder(320, 240);
+            placeholder.fill(QColor(200, 200, 200)); // Light Gray
+            listItem->setIcon(QIcon(placeholder));
+        }
+        listItem->setData(Qt::UserRole, game.filePath);
+        // Optional: Tooltip
+        listItem->setToolTip(game.cleanName);
+        
+        this->gameListWidget->addItem(listItem);
     }
 }
 
@@ -245,4 +294,42 @@ void GameListTab::onEditGameRequested(QString path) {
     if (dialog.exec() == QDialog::Accepted) {
         GameManager::instance().updateGame(dialog.getGameItem());
     }
+}
+
+void GameListTab::onViewToggle() {
+    if (this->viewToggleBtn->isChecked()) {
+        this->viewStack->setCurrentWidget(this->gameListWidget);
+        this->viewToggleBtn->setText("List View");
+    } else {
+        this->viewStack->setCurrentWidget(this->gameTable);
+        this->viewToggleBtn->setText("Card View");
+    }
+}
+
+void GameListTab::onCardClicked(QListWidgetItem *item) {
+    if (!item) return;
+    
+    QString path = item->data(Qt::UserRole).toString();
+    GameItem gameItem = GameManager::instance().getGameByPath(path);
+    if (gameItem.filePath.isEmpty()) return;
+
+    QDialog dialog(this);
+    dialog.setWindowTitle(gameItem.cleanName);
+    dialog.setMinimumWidth(600);
+    
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+    // Remove margins for cleaner look
+    layout->setContentsMargins(0, 0, 0, 0); 
+    
+    GameDetailWidget *detail = new GameDetailWidget(gameItem);
+    layout->addWidget(detail);
+    
+    connect(detail, &GameDetailWidget::playGame, this, &GameListTab::runGame);
+    connect(detail, &GameDetailWidget::openFolder, this, &GameListTab::openGameFolder);
+    connect(detail, &GameDetailWidget::requestEdit, [&](QString p){
+        dialog.accept(); // Close the detail dialog
+        this->onEditGameRequested(p);
+    });
+    
+    dialog.exec();
 }
