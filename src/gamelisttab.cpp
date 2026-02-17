@@ -90,7 +90,11 @@ void GameListTab::setupUI() {
     this->gameTable->setColumnCount(7); // Name, Folder Name, Type, Korean, Tags, Last Played, Path
     this->gameTable->setHorizontalHeaderLabels(QStringList() << "Name" << "Folder Name" << "Type" << "Korean" << "Tags" << "Last Played" << "Path");
     this->gameTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    this->gameTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
+    // this->gameTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch); // Too Wide
+    
+    // Set explicit widths
+    this->gameTable->setColumnWidth(4, 150); // Tags - narrower
+    this->gameTable->setColumnWidth(5, 140); // Last Played - wide enough for time
     this->gameTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     this->gameTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     this->gameTable->setContextMenuPolicy(Qt::CustomContextMenu);
