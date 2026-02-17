@@ -1,6 +1,7 @@
 #include "gamelisttab.h"
 #include "gamedetailwidget.h"
 #include "gameinfodialog.h"
+#include "gamecarddelegate.h"
 #include <QVBoxLayout>
 #include <QHeaderView>
 #include <QMenu>
@@ -107,13 +108,18 @@ void GameListTab::setupUI() {
     // Card List
     this->gameListWidget = new QListWidget();
     this->gameListWidget->setViewMode(QListWidget::IconMode);
-    this->gameListWidget->setIconSize(QSize(320, 240)); // Adjusted Portrait size
+    this->gameListWidget->setIconSize(QSize(320, 200)); // Standard 16:10 aspect
     this->gameListWidget->setResizeMode(QListWidget::Adjust);
-    this->gameListWidget->setGridSize(QSize(360, 260)); // Enforce grid cell size
+    // Grid Size needs to be larger than Icon Size to fit text
+    // Icon Height 200 + Text Space (approx 60-80px)
+    this->gameListWidget->setGridSize(QSize(340, 280)); 
     this->gameListWidget->setMovement(QListView::Static);
     this->gameListWidget->setSpacing(15);
     this->gameListWidget->setUniformItemSizes(true);
     this->gameListWidget->setWordWrap(true);
+    
+    // Set Custom Delegate
+    this->gameListWidget->setItemDelegate(new GameCardDelegate(this->gameListWidget));
     
     connect(this->gameListWidget, &QListWidget::itemClicked, this, &GameListTab::onCardClicked);
     this->viewStack->addWidget(this->gameListWidget);
@@ -241,7 +247,7 @@ void GameListTab::refreshList() {
             listItem->setIcon(QIcon(game.thumbnailPath));
         } else {
             // Placeholder
-            QPixmap placeholder(320, 240);
+            QPixmap placeholder(320, 200);
             placeholder.fill(QColor(200, 200, 200)); // Light Gray
             listItem->setIcon(QIcon(placeholder));
         }
