@@ -135,49 +135,67 @@ GameItem GameManager::getGameByPath(const QString &path) const {
     return GameItem(); // Return empty item if not found
 }
 
+void GameManager::updateLastPlayed(const QString &path) {
+    for (int i = 0; i < library.size(); ++i) {
+        if (library[i].filePath == path) {
+            library[i].lastPlayed = QDateTime::currentDateTime();
+            saveGames();
+            emit libraryUpdated(); // Or emit a specific signal if needed
+            return;
+        }
+    }
+}
+
 QJsonObject GameManager::gameToJson(const GameItem &item) {
     QJsonObject obj;
-    obj["cleanName"] = item.cleanName;
     obj["originalName"] = item.originalName;
+    obj["cleanName"] = item.cleanName;
     obj["filePath"] = item.filePath;
     obj["type"] = static_cast<int>(item.type);
-    
     obj["koreanSupport"] = item.koreanSupport;
     obj["folderName"] = item.folderName;
+    
+    QJsonArray tagArray;
+    for (const QString &tag : item.tags) {
+        tagArray.append(tag);
+    }
+    obj["tags"] = tagArray;
+    
     obj["source"] = item.source;
     obj["gameCode"] = item.gameCode;
-    
-    QJsonArray tagsArr;
-    for (const QString &t : item.tags) tagsArr.append(t);
-    obj["tags"] = tagsArr;
-    
     obj["thumbnailPath"] = item.thumbnailPath;
     obj["exePath"] = item.exePath;
     
+    if (item.lastPlayed.isValid()) {
+        obj["lastPlayed"] = item.lastPlayed.toString(Qt::ISODate);
+    }
+
     return obj;
 }
 
 GameItem GameManager::jsonToGame(const QJsonObject &obj) {
     GameItem item;
-    item.cleanName = obj["cleanName"].toString();
     item.originalName = obj["originalName"].toString();
+    item.cleanName = obj["cleanName"].toString();
     item.filePath = obj["filePath"].toString();
     item.type = static_cast<GameType>(obj["type"].toInt());
-    
     item.koreanSupport = obj["koreanSupport"].toBool();
     item.folderName = obj["folderName"].toString();
+    
+    QJsonArray tagArray = obj["tags"].toArray();
+    for (const QJsonValue &val : tagArray) {
+        item.tags.append(val.toString());
+    }
+    
     item.source = obj["source"].toString();
     item.gameCode = obj["gameCode"].toString();
     item.thumbnailPath = obj["thumbnailPath"].toString();
     item.exePath = obj["exePath"].toString();
     
-    if (obj.contains("tags") && obj["tags"].isArray()) {
-        QJsonArray tagsArr = obj["tags"].toArray();
-        for (const auto &val : tagsArr) {
-            item.tags.append(val.toString());
-        }
+    if (obj.contains("lastPlayed")) {
+        item.lastPlayed = QDateTime::fromString(obj["lastPlayed"].toString(), Qt::ISODate);
     }
-    
+
     return item;
 }
 

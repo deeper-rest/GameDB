@@ -45,14 +45,24 @@ void GameListTab::setupUI() {
     
     // View Toggle
     this->viewToggleBtn = new QToolButton();
-    this->viewToggleBtn->setText("Card"); // Button says what to switch TO (or current mode? usually toggle)
-    // Let's make it checkable: Unchecked = List, Checked = Card. Text can indicate current or target.
-    // Let's stick to text indicating the OTHER view, or Icons.
-    // Simple text for now: "Card View"
     this->viewToggleBtn->setText("Card View");
     this->viewToggleBtn->setCheckable(true);
     connect(this->viewToggleBtn, &QToolButton::clicked, this, &GameListTab::onViewToggle);
     topLayout->addWidget(this->viewToggleBtn);
+    
+    // Sort Combo
+    this->sortCombo = new QComboBox();
+    this->sortCombo->addItem("Name", 0);
+    this->sortCombo->addItem("Last Played", 1);
+    connect(this->sortCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &GameListTab::onSortChanged);
+    topLayout->addWidget(this->sortCombo);
+    
+    // Sort Order
+    this->sortOrderBtn = new QToolButton();
+    this->sortOrderBtn->setText("Asc"); // Default Asc for Name
+    this->sortOrderBtn->setCheckable(true); // Checked = Desc? Or just toggle text/icon
+    connect(this->sortOrderBtn, &QToolButton::clicked, this, &GameListTab::onSortOrderChanged);
+    topLayout->addWidget(this->sortOrderBtn);
 
     layout->addLayout(topLayout);
     
@@ -60,8 +70,8 @@ void GameListTab::setupUI() {
 
     // Table
     this->gameTable = new QTableWidget();
-    this->gameTable->setColumnCount(6); // Name, Folder Name, Type, Korean, Tags, Path
-    this->gameTable->setHorizontalHeaderLabels(QStringList() << "Name" << "Folder Name" << "Type" << "Korean" << "Tags" << "Path");
+    this->gameTable->setColumnCount(7); // Name, Folder Name, Type, Korean, Tags, Last Played, Path
+    this->gameTable->setHorizontalHeaderLabels(QStringList() << "Name" << "Folder Name" << "Type" << "Korean" << "Tags" << "Last Played" << "Path");
     this->gameTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     this->gameTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
     this->gameTable->setSelectionBehavior(QAbstractItemView::SelectRows);
@@ -101,19 +111,38 @@ void GameListTab::refreshList() {
     QString filter = this->searchEdit->text().toLower();
     int infoTypeData = this->typeFilterCombo->currentData().toInt();
     
+    // Filter First
+    QList<GameItem> filteredGames;
     for (const auto &game : games) {
         // Name Filter
         if (!filter.isEmpty() && !game.cleanName.toLower().contains(filter) && !game.folderName.toLower().contains(filter)) {
             continue;
         }
-        
         // Type Filter
         if (infoTypeData != -1) {
             if (static_cast<int>(game.type) != infoTypeData) {
                 continue;
             }
         }
-        
+        filteredGames.append(game);
+    }
+    
+    // Sort
+    int sortIndex = this->sortCombo->currentIndex(); // 0: Name, 1: Last Played
+    bool ascending = !this->sortOrderBtn->isChecked(); // unchecked = Asc, checked = Desc? Let's check logic.
+    // Button Text says "Asc" or "Desc".
+    
+    std::sort(filteredGames.begin(), filteredGames.end(), [sortIndex, ascending](const GameItem &a, const GameItem &b) {
+        if (sortIndex == 1) { // Last Played
+            if (ascending) return a.lastPlayed < b.lastPlayed;
+            else return a.lastPlayed > b.lastPlayed;
+        } else { // Name (Default)
+            if (ascending) return a.cleanName < b.cleanName;
+            else return a.cleanName > b.cleanName;
+        }
+    });
+
+    for (const auto &game : filteredGames) {        
         int row = this->gameTable->rowCount();
         this->gameTable->insertRow(row);
         
@@ -144,7 +173,14 @@ void GameListTab::refreshList() {
         // Tags
         this->gameTable->setItem(row, 4, new QTableWidgetItem(game.tags.join(", ")));
         
-        this->gameTable->setItem(row, 5, new QTableWidgetItem(game.filePath));
+        // Last Played
+        QString lastPlayedStr = "-";
+        if (game.lastPlayed.isValid()) {
+            lastPlayedStr = game.lastPlayed.toString("yyyy-MM-dd HH:mm");
+        }
+        this->gameTable->setItem(row, 5, new QTableWidgetItem(lastPlayedStr));
+
+        this->gameTable->setItem(row, 6, new QTableWidgetItem(game.filePath));
         
         // Add to List Widget
         QListWidgetItem *listItem = new QListWidgetItem(game.cleanName);
@@ -170,6 +206,20 @@ void GameListTab::onSearchChanged(const QString &text) {
 
 void GameListTab::onTypeFilterChanged(int index) {
     Q_UNUSED(index);
+    refreshList();
+}
+
+void GameListTab::onSortChanged(int index) {
+    Q_UNUSED(index);
+    refreshList();
+}
+
+void GameListTab::onSortOrderChanged() {
+    if (this->sortOrderBtn->isChecked()) {
+        this->sortOrderBtn->setText("Desc");
+    } else {
+        this->sortOrderBtn->setText("Asc");
+    }
     refreshList();
 }
 
@@ -199,7 +249,7 @@ void GameListTab::removeGame() {
     int row = this->gameTable->currentRow();
     if (row < 0) return;
     
-    QString path = this->gameTable->item(row, 5)->text(); // Path is now col 5
+    QString path = this->gameTable->item(row, 6)->text(); // Path is now col 6
     
     if (QMessageBox::question(this, "Remove Game", "Are you sure you want to remove this game from the library?") == QMessageBox::Yes) {
         GameManager::instance().removeGameByPath(path);
@@ -230,16 +280,8 @@ void GameListTab::onRowClicked(int row, int column) {
     }
     
     // 3. Expand new row
-    // Get GameItem data. 
-    // Wait, since we are inserting/removing rows, maintaining mapping to GameManager list is tricky if we use index.
-    // Ideally we store hidden data in the row?
-    // Current refreshList populates table 1:1 with filtered list.
-    // If we filter, index matches the filtered list.
-    // BUT since we insert a row, the visual index mismatches the list index for subsequent items.
-    // Solution: Get data BEFORE inserting row.
-    // Identify which game it is from the Hidden Path Column (Col 5).
     
-    QTableWidgetItem *pathItem = this->gameTable->item(row, 5);
+    QTableWidgetItem *pathItem = this->gameTable->item(row, 6);
     if (!pathItem) return;
     QString path = pathItem->text();
     
@@ -247,7 +289,7 @@ void GameListTab::onRowClicked(int row, int column) {
     
     // Insert Row
     this->gameTable->insertRow(row + 1);
-    this->gameTable->setSpan(row + 1, 0, 1, 6); // Span all columns
+    this->gameTable->setSpan(row + 1, 0, 1, 7); // Span all columns (now 7)
     this->gameTable->setRowHeight(row + 1, 280); // Height for detail widget
     
     GameDetailWidget *detail = new GameDetailWidget(item);
@@ -266,6 +308,31 @@ void GameListTab::runGame(QString exePath) {
     QFileInfo info(exePath);
     QString workingDir = info.absolutePath();
     
+    // Update Last Played
+    // We need to find which game corresponds to this exe path.
+    // For now, if we trust the context, we should pass the game path or item.
+    // Actually, GameManager's updateLastPlayed takes a 'path' (filePath of the game item).
+    // The runGame slot receives exePath... wait.
+    // The signals from GameDetailWidget send 'exePath'.
+    // We need to know which GameItem triggered this.
+    // BUT! Since GameItems have unique paths, we can search for the game with this exePath?
+    // Not unique enough if multiple games share same exe? Unlikely for folder games.
+    // Better: Iterate games and find one with this exePath.
+    
+    // Optimization: Pass GameItem path to runGame?
+    // Let's stick to existing signature for now and search.
+    
+    QList<GameItem> games = GameManager::instance().getGames();
+    for (const auto &g : games) {
+        // If it's a folder game, exePath matches g.exePath.
+        // If it's an archive, exePath might be temp?
+        // Let's assume folder games for now as that's the main focus.
+        if (g.exePath == exePath || g.filePath == exePath) {
+            GameManager::instance().updateLastPlayed(g.filePath);
+            break;
+        }
+    }
+
     bool success = QProcess::startDetached(exePath, QStringList(), workingDir);
     if (!success) {
         QMessageBox::critical(this, tr("Error"), tr("Failed to launch game:\n%1").arg(exePath));

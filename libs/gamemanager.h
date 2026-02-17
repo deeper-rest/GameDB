@@ -24,6 +24,8 @@ public:
     QList<GameItem> getGames() const;
     GameItem getGameByPath(const QString &path) const;
     
+    void updateLastPlayed(const QString &path);
+
     void saveGames();
     void loadGames();
 

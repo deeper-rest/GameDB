@@ -2,6 +2,7 @@
 #define GAMEDATA_H
 
 #include <QString>
+#include <QDateTime>
 
 enum class GameType {
     Folder,
@@ -28,6 +29,9 @@ struct GameItem {
     // Thumbnail & Launch
     QString thumbnailPath;
     QString exePath; // Specific executable to run (for Folder type games)
+    
+    // Statistics
+    QDateTime lastPlayed;
 };
 
 #endif // GAMEDATA_H

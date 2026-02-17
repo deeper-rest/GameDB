@@ -32,6 +32,10 @@ private slots:
     // Card View Slots
     void onViewToggle();
     void onCardClicked(QListWidgetItem *item);
+    
+    // Sort Slots
+    void onSortChanged(int index);
+    void onSortOrderChanged();
 
 private:
     void setupUI();
@@ -39,6 +43,11 @@ private:
     QLineEdit *searchEdit;
     QComboBox *typeFilterCombo;
     QToolButton *viewToggleBtn;
+    
+    // Sorting
+    QComboBox *sortCombo;
+    QToolButton *sortOrderBtn;
+    bool sortAscending = false; // Default Descending (Newest/Z-A) or Ascending? Usually Asc for Name, Desc for Date.
 
     QStackedWidget *viewStack;
     QTableWidget *gameTable;
