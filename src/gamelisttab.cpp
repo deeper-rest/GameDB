@@ -2,6 +2,7 @@
 #include "gamedetailwidget.h"
 #include "gameinfodialog.h"
 #include "gamecarddelegate.h"
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QHeaderView>
 #include <QMenu>
@@ -49,10 +50,12 @@ void GameListTab::setupUI() {
     topLayout->addWidget(this->typeFilterCombo);
     
     // Tag Filter
-    this->tagFilterCombo = new QComboBox();
-    this->tagFilterCombo->addItem("All Tags", "All");
+    this->tagFilterCombo = new MultiSelectComboBox();
     updateTagFilterCombo();
-    connect(this->tagFilterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &GameListTab::onTagFilterChanged);
+    connect(this->tagFilterCombo, &MultiSelectComboBox::selectionChanged, this, [this]() {
+        // Tag filter changed - defer the heavy refresh to keep UI responsive
+        QTimer::singleShot(50, this, &GameListTab::refreshList);
+    });
     topLayout->addWidget(this->tagFilterCombo);
     
     // View Toggle
@@ -139,7 +142,8 @@ void GameListTab::refreshList() {
     QList<GameItem> games = GameManager::instance().getGames();
     QString filter = this->searchEdit->text().toLower();
     int infoTypeData = this->typeFilterCombo->currentData().toInt();
-    QString tagFilter = this->tagFilterCombo->currentData().toString();
+    QStringList tagFilters = this->tagFilterCombo->getSelectedData();
+    bool filterAllTags = tagFilters.contains("All") || tagFilters.isEmpty();
     
     // Filter First
     QList<GameItem> filteredGames;
@@ -154,9 +158,16 @@ void GameListTab::refreshList() {
                 continue;
             }
         }
-        // Tag Filter
-        if (tagFilter != "All") {
-            if (!game.tags.contains(tagFilter)) {
+        // Tag Filter (Match ALL selected tags, or bypass if All/Empty selected)
+        if (!filterAllTags) {
+            bool hasAllTags = true;
+            for (const QString &t : tagFilters) {
+                if (!game.tags.contains(t)) {
+                    hasAllTags = false;
+                    break;
+                }
+            }
+            if (!hasAllTags) {
                 continue;
             }
         }
@@ -274,26 +285,29 @@ void GameListTab::onTypeFilterChanged(int index) {
 
 void GameListTab::onTagFilterChanged(int index) {
     Q_UNUSED(index);
-    refreshList();
+    // Deprecated for MultiSelectComboBox, logic moved to lambda in setupUI
 }
 
 void GameListTab::updateTagFilterCombo() {
-    QString current = this->tagFilterCombo->currentData().toString();
+    QStringList currentSelection = this->tagFilterCombo->getSelectedData();
     this->tagFilterCombo->blockSignals(true);
-    this->tagFilterCombo->clear();
-    this->tagFilterCombo->addItem("All Tags", "All");
+    this->tagFilterCombo->clearItems();
+    
+    // Add "All Tags" as an option with UserRole data "All"
+    this->tagFilterCombo->addCheckableItem("All Tags", "All");
     
     QStringList tags = TagManager::instance().getTags();
     tags.sort(); // Sort tags alphabetically
     
     for (const QString &tag : tags) {
-        this->tagFilterCombo->addItem(tag, tag);
+        this->tagFilterCombo->addCheckableItem(tag, tag);
     }
     
-    // Restore selection if possible
-    int idx = this->tagFilterCombo->findData(current);
-    if (idx != -1) this->tagFilterCombo->setCurrentIndex(idx);
-    else this->tagFilterCombo->setCurrentIndex(0);
+    // Restore selection via checkboxes
+    if (currentSelection.isEmpty()) {
+        currentSelection.append("All");
+    }
+    this->tagFilterCombo->setSelectedData(currentSelection);
     
     this->tagFilterCombo->blockSignals(false);
 }

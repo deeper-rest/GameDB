@@ -8,6 +8,7 @@
 #include <QComboBox>
 #include <QToolButton>
 #include "gamemanager.h"
+#include "multiselectcombobox.h"
 
 class GameListTab : public QWidget {
     Q_OBJECT
@@ -47,7 +48,7 @@ private:
     
     QLineEdit *searchEdit;
     QComboBox *typeFilterCombo;
-    QComboBox *tagFilterCombo;
+    MultiSelectComboBox *tagFilterCombo;
     QToolButton *viewToggleBtn;
     
     // Sorting

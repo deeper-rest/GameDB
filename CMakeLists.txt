@@ -33,6 +33,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         libs/thumbnailmanager.h
         libs/gamedetailwidget.h
         libs/gamecarddelegate.h
+        libs/multiselectcombobox.h
 
         src/mainwindow.cpp
         src/filelisttab.cpp
@@ -45,6 +46,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         src/thumbnailmanager.cpp
         src/gamedetailwidget.cpp
         src/gamecarddelegate.cpp
+        src/multiselectcombobox.cpp
 
 
     )
