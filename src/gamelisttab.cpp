@@ -14,13 +14,76 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QLineEdit>
+#include <QSortFilterProxyModel>
 #include "tagmanager.h"
 
-GameListTab::GameListTab() {
+// Custom Proxy Model for advanced filtering
+class GameListFilterProxyModel : public QSortFilterProxyModel {
+public:
+    GameListFilterProxyModel(QObject *parent = nullptr) : QSortFilterProxyModel(parent) {}
+
+    QString searchText;
+    int typeFilter = -1;
+    QStringList tagFilters;
+    bool filterAllTags = true;
+
+    void updateFilter() {
+        invalidateFilter();
+    }
+
+protected:
+    bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override {
+        QModelIndex index = sourceModel()->index(source_row, 0, source_parent);
+        
+        GameType type = static_cast<GameType>(sourceModel()->data(index, GameRoles::TypeRole).toInt());
+        QString cleanName = sourceModel()->data(index, GameRoles::CleanNameRole).toString().toLower();
+        QString folderName = sourceModel()->data(index, GameRoles::FolderNameRole).toString().toLower();
+        QStringList tags = sourceModel()->data(index, GameRoles::TagsRole).toStringList();
+
+        if (typeFilter != -1 && static_cast<int>(type) != typeFilter)
+            return false;
+
+        if (!searchText.isEmpty() && !cleanName.contains(searchText) && !folderName.contains(searchText))
+            return false;
+
+        if (!filterAllTags) {
+            for (const QString &t : tagFilters) {
+                if (!tags.contains(t))
+                    return false;
+            }
+        }
+        return true;
+    }
+
+    bool lessThan(const QModelIndex &left, const QModelIndex &right) const override {
+        int sortCol = sortColumn(); 
+        
+        // 0: Name, 1: Folder, 2: Type, 3: Korean, 4: Tags, 5: Last Played
+        if (sortCol == 2) {
+            return sourceModel()->data(left, GameRoles::TypeRole).toInt() < sourceModel()->data(right, GameRoles::TypeRole).toInt();
+        } else if (sortCol == 3) {
+            bool lKor = sourceModel()->data(left, Qt::ForegroundRole).value<QColor>() == QColor(Qt::darkGreen);
+            bool rKor = sourceModel()->data(right, Qt::ForegroundRole).value<QColor>() == QColor(Qt::darkGreen);
+            return lKor < rKor;
+        } else if (sortCol == 5) {
+            return sourceModel()->data(left, GameRoles::LastPlayedRole).toDateTime() < sourceModel()->data(right, GameRoles::LastPlayedRole).toDateTime();
+        }
+        
+        // Default String Sort for Name, Folder Name, Tags
+        return sourceModel()->data(left, Qt::DisplayRole).toString() < sourceModel()->data(right, Qt::DisplayRole).toString();
+    }
+};
+
+GameListTab::GameListTab() : expandedRow(-1) {
+    libraryModel = new GameLibraryModel(this);
+    proxyModel = new GameListFilterProxyModel(this);
+    proxyModel->setSourceModel(libraryModel);
+    // Sort logic uses column 0 initially
+    proxyModel->sort(0, Qt::AscendingOrder);
+
     setupUI();
     refreshList();
     
-    connect(&GameManager::instance(), &GameManager::libraryUpdated, this, &GameListTab::refreshList);
     connect(&TagManager::instance(), &TagManager::tagAdded, [&](const QString &){ updateTagFilterCombo(); });
     connect(&TagManager::instance(), &TagManager::tagRemoved, [&](const QString &){ updateTagFilterCombo(); });
     connect(&TagManager::instance(), &TagManager::tagRenamed, [&](const QString &, const QString &){ updateTagFilterCombo(); });
@@ -52,10 +115,7 @@ void GameListTab::setupUI() {
     // Tag Filter
     this->tagFilterCombo = new MultiSelectComboBox();
     updateTagFilterCombo();
-    connect(this->tagFilterCombo, &MultiSelectComboBox::selectionChanged, this, [this]() {
-        // Tag filter changed - defer the heavy refresh to keep UI responsive
-        QTimer::singleShot(50, this, &GameListTab::refreshList);
-    });
+    connect(this->tagFilterCombo, &MultiSelectComboBox::selectionChanged, this, &GameListTab::onTagFilterChanged);
     topLayout->addWidget(this->tagFilterCombo);
     
     // View Toggle
@@ -78,9 +138,9 @@ void GameListTab::setupUI() {
     
     // Sort Order
     this->sortOrderBtn = new QToolButton();
-    this->sortOrderBtn->setText("Asc"); // Default Asc for Name
-    this->sortOrderBtn->setCheckable(true); // Checked = Desc? Or just toggle text/icon
-    this->sortOrderBtn->setFixedWidth(50); // Fixed Width for UI Stability
+    this->sortOrderBtn->setText("Asc"); 
+    this->sortOrderBtn->setCheckable(true);
+    this->sortOrderBtn->setFixedWidth(50);
     connect(this->sortOrderBtn, &QToolButton::clicked, this, &GameListTab::onSortOrderChanged);
     topLayout->addWidget(this->sortOrderBtn);
 
@@ -88,193 +148,66 @@ void GameListTab::setupUI() {
     
     this->viewStack = new QStackedWidget();
 
-    // Table
-    this->gameTable = new QTableWidget();
-    this->gameTable->setColumnCount(7); // Name, Folder Name, Type, Korean, Tags, Last Played, Path
-    this->gameTable->setHorizontalHeaderLabels(QStringList() << "Name" << "Folder Name" << "Type" << "Korean" << "Tags" << "Last Played" << "Path");
-    this->gameTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    // this->gameTable->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch); // Too Wide
+    // Table View
+    this->gameTable = new QTableView();
+    this->gameTable->setModel(proxyModel);
     
-    // Set explicit widths
-    this->gameTable->setColumnWidth(4, 150); // Tags - narrower
-    this->gameTable->setColumnWidth(5, 140); // Last Played - wide enough for time
+    // Hide Path Column
+    this->gameTable->setColumnHidden(6, true);
+    
+    this->gameTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
+    this->gameTable->setColumnWidth(4, 150); 
+    this->gameTable->setColumnWidth(5, 140); 
+    
     this->gameTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     this->gameTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     this->gameTable->setContextMenuPolicy(Qt::CustomContextMenu);
-    this->gameTable->setIconSize(QSize(48, 48)); // Set icon size
+    this->gameTable->setIconSize(QSize(48, 48)); 
     
-    // Enable Header Click
+    // Disable automatic sorting so we can control it via click
+    this->gameTable->setSortingEnabled(false); 
+    
     connect(this->gameTable->horizontalHeader(), &QHeaderView::sectionClicked, this, &GameListTab::onHeaderClicked);
-    
-    connect(this->gameTable, &QTableWidget::cellClicked, this, &GameListTab::onRowClicked);
-    connect(this->gameTable, &QTableWidget::cellDoubleClicked, this, &GameListTab::onDoubleClicked);
-    connect(this->gameTable, &QTableWidget::customContextMenuRequested, this, &GameListTab::showContextMenu);
+    connect(this->gameTable, &QTableView::clicked, this, &GameListTab::onRowClicked);
+    connect(this->gameTable, &QTableView::doubleClicked, this, &GameListTab::onDoubleClicked);
+    connect(this->gameTable, &QTableView::customContextMenuRequested, this, &GameListTab::showContextMenu);
     
     this->viewStack->addWidget(this->gameTable);
     
-    // Card List
-    this->gameListWidget = new QListWidget();
-    this->gameListWidget->setViewMode(QListWidget::IconMode);
-    this->gameListWidget->setIconSize(QSize(320, 200)); // Standard 16:10 aspect
-    this->gameListWidget->setResizeMode(QListWidget::Adjust);
-    // Grid Size needs to be larger than Icon Size to fit text
-    // Icon Height 200 + Text Space (approx 60-80px)
-    this->gameListWidget->setGridSize(QSize(340, 280)); 
-    this->gameListWidget->setMovement(QListView::Static);
-    this->gameListWidget->setSpacing(15);
-    this->gameListWidget->setUniformItemSizes(true);
-    this->gameListWidget->setWordWrap(true);
+    // Card List View
+    this->gameListView = new QListView();
+    this->gameListView->setModel(proxyModel);
+    this->gameListView->setViewMode(QListView::IconMode);
     
-    // Set Custom Delegate
-    this->gameListWidget->setItemDelegate(new GameCardDelegate(this->gameListWidget));
+    // For icon mode, QListView requires an item delegate to draw custom GameItem cards since data isn't just an icon.
+    this->gameListView->setItemDelegate(new GameCardDelegate(this->gameListView));
     
-    connect(this->gameListWidget, &QListWidget::itemClicked, this, &GameListTab::onCardClicked);
-    this->viewStack->addWidget(this->gameListWidget);
+    this->gameListView->setResizeMode(QListView::Adjust);
+    this->gameListView->setGridSize(QSize(340, 280)); 
+    this->gameListView->setMovement(QListView::Static);
+    this->gameListView->setSpacing(15);
+    this->gameListView->setUniformItemSizes(true);
+    this->gameListView->setWordWrap(true);
+    
+    connect(this->gameListView, &QListView::clicked, this, &GameListTab::onCardClicked);
+    this->viewStack->addWidget(this->gameListView);
 
     layout->addWidget(this->viewStack);
 }
 
 void GameListTab::refreshList() {
-    this->gameTable->setRowCount(0);
-    this->gameListWidget->clear();
+    // With Model/View, refreshList just updates the proxy filter state. No UI recreation!
+    proxyModel->searchText = this->searchEdit->text().toLower();
+    proxyModel->typeFilter = this->typeFilterCombo->currentData().toInt();
     
-    this->expandedRow = -1; // Reset expansion on refresh
-    QList<GameItem> games = GameManager::instance().getGames();
-    QString filter = this->searchEdit->text().toLower();
-    int infoTypeData = this->typeFilterCombo->currentData().toInt();
-    QStringList tagFilters = this->tagFilterCombo->getSelectedData();
-    bool filterAllTags = tagFilters.contains("All") || tagFilters.isEmpty();
+    proxyModel->tagFilters = this->tagFilterCombo->getSelectedData();
+    proxyModel->filterAllTags = proxyModel->tagFilters.contains("All") || proxyModel->tagFilters.isEmpty();
     
-    // Filter First
-    QList<GameItem> filteredGames;
-    for (const auto &game : games) {
-        // Name Filter
-        if (!filter.isEmpty() && !game.cleanName.toLower().contains(filter) && !game.folderName.toLower().contains(filter)) {
-            continue;
-        }
-        // Type Filter
-        if (infoTypeData != -1) {
-            if (static_cast<int>(game.type) != infoTypeData) {
-                continue;
-            }
-        }
-        // Tag Filter (Match ALL selected tags, or bypass if All/Empty selected)
-        if (!filterAllTags) {
-            bool hasAllTags = true;
-            for (const QString &t : tagFilters) {
-                if (!game.tags.contains(t)) {
-                    hasAllTags = false;
-                    break;
-                }
-            }
-            if (!hasAllTags) {
-                continue;
-            }
-        }
-        filteredGames.append(game);
-    }
-    
-    // Sort
-    int sortIndex = this->sortCombo->currentIndex(); // 0: Name, 1: Last Played
-    // Map table columns to sort index if needed, or use a separate sort state.
-    // Let's use sortCombo as the source of truth for "Type" of sort.
-    // If we click header, we should update sortCombo if possible, or support more sort types.
-    // Current Combo: Name(0), Last Played(1).
-    // Table Cols: Name(0), Folder(1), Type(2), Korean(3), Tags(4), LastPlayed(5), Path(6)
-    
-    // Extended Sort Logic
-    // We can use the column index directly for sorting if we extend the enum/logic.
-    // Let's rely on sortCombo's user data or just index for simple cases, 
-    // BUT since we want to support ALL columns, we need a member variable `currentSortColumn`?
-    // OR we just map visual columns to sort logic.
-    
-    // To keep it simple and sync with UI:
-    // If sortIndex is 0 (Name) -> Sort by Name
-    // If sortIndex is 1 (Last Played) -> Sort by Date
-    // What if user clicked "Folder"? There is no combo item for it.
-    // We should probably add items to combo OR just use internal state and update combo text to "Custom" or match if possible.
-    
-    // Let's add all columns to combo?
-    // 0: Name, 1: Folder, 2: Type, 3: Korean, 4: Tags, 5: Last Played.
-    // This requires updating setupUI. Let's do that first (in next step or assume done).
-    // For now, let's assume we update the combo to have all these.
-    
-    bool ascending = !this->sortOrderBtn->isChecked(); 
-    
-    std::sort(filteredGames.begin(), filteredGames.end(), [sortIndex, ascending](const GameItem &a, const GameItem &b) {
-        // Sort Logic based on Index
-        // 0: Name, 1: Folder, 2: Type, 3: Korean, 4: Tags, 5: Last Played
-        bool result = false;
-        if (sortIndex == 0) result = a.cleanName < b.cleanName;
-        else if (sortIndex == 1) result = a.folderName < b.folderName;
-        else if (sortIndex == 2) result = static_cast<int>(a.type) < static_cast<int>(b.type);
-        else if (sortIndex == 3) result = a.koreanSupport < b.koreanSupport;
-        else if (sortIndex == 4) result = a.tags.join("") < b.tags.join(""); // Simplified tag sort
-        else if (sortIndex == 5) result = a.lastPlayed < b.lastPlayed;
-        else result = a.cleanName < b.cleanName;
-        
-        return ascending ? result : !result;
-    });
-
-    for (const auto &game : filteredGames) {        
-        int row = this->gameTable->rowCount();
-        this->gameTable->insertRow(row);
-        
-        QTableWidgetItem *nameItem = new QTableWidgetItem(game.cleanName);
-        if (!game.thumbnailPath.isEmpty() && QFile::exists(game.thumbnailPath)) {
-            QIcon icon(game.thumbnailPath);
-            nameItem->setIcon(icon);
-        }
-        this->gameTable->setItem(row, 0, nameItem);
-        this->gameTable->setItem(row, 1, new QTableWidgetItem(game.folderName));
-        
-        QString typeStr;
-        switch(game.type) {
-            case GameType::Folder: typeStr = "Folder"; break;
-            case GameType::Zip: typeStr = "Zip"; break;
-            case GameType::SevenZip: typeStr = "7z"; break;
-            case GameType::Rar: typeStr = "Rar"; break;
-            case GameType::Iso: typeStr = "Iso"; break; 
-            default: typeStr = "Unknown"; break;
-        }
-        this->gameTable->setItem(row, 2, new QTableWidgetItem(typeStr));
-        
-        // Korean
-        this->gameTable->setItem(row, 3, new QTableWidgetItem(game.koreanSupport ? "O" : "X"));
-        // Center align the O/X
-        this->gameTable->item(row, 3)->setTextAlignment(Qt::AlignCenter);
-        
-        // Tags
-        this->gameTable->setItem(row, 4, new QTableWidgetItem(game.tags.join(", ")));
-        
-        // Last Played
-        QString lastPlayedStr = "-";
-        if (game.lastPlayed.isValid()) {
-            lastPlayedStr = game.lastPlayed.toString("yyyy-MM-dd HH:mm");
-        }
-        this->gameTable->setItem(row, 5, new QTableWidgetItem(lastPlayedStr));
-
-        this->gameTable->setItem(row, 6, new QTableWidgetItem(game.filePath));
-        
-        // Add to List Widget
-        QListWidgetItem *listItem = new QListWidgetItem(game.cleanName);
-        if (!game.thumbnailPath.isEmpty() && QFile::exists(game.thumbnailPath)) {
-            listItem->setIcon(QIcon(game.thumbnailPath));
-        } else {
-            // Placeholder
-            QPixmap placeholder(320, 200);
-            placeholder.fill(QColor(200, 200, 200)); // Light Gray
-            listItem->setIcon(QIcon(placeholder));
-        }
-        listItem->setData(Qt::UserRole, game.filePath);
-        // Optional: Tooltip
-        listItem->setToolTip(game.cleanName);
-        
-        this->gameListWidget->addItem(listItem);
-    }
+    proxyModel->updateFilter();
 }
 
 void GameListTab::onSearchChanged(const QString &text) {
+    Q_UNUSED(text);
     refreshList();
 }
 
@@ -283,9 +216,9 @@ void GameListTab::onTypeFilterChanged(int index) {
     refreshList();
 }
 
-void GameListTab::onTagFilterChanged(int index) {
-    Q_UNUSED(index);
-    // Deprecated for MultiSelectComboBox, logic moved to lambda in setupUI
+void GameListTab::onTagFilterChanged() {
+    // Defer the refresh slightly to keep UI ultra responsive
+    QTimer::singleShot(50, this, &GameListTab::refreshList);
 }
 
 void GameListTab::updateTagFilterCombo() {
@@ -293,28 +226,28 @@ void GameListTab::updateTagFilterCombo() {
     this->tagFilterCombo->blockSignals(true);
     this->tagFilterCombo->clearItems();
     
-    // Add "All Tags" as an option with UserRole data "All"
     this->tagFilterCombo->addCheckableItem("All Tags", "All");
     
     QStringList tags = TagManager::instance().getTags();
-    tags.sort(); // Sort tags alphabetically
+    tags.sort();
     
     for (const QString &tag : tags) {
         this->tagFilterCombo->addCheckableItem(tag, tag);
     }
     
-    // Restore selection via checkboxes
     if (currentSelection.isEmpty()) {
         currentSelection.append("All");
     }
     this->tagFilterCombo->setSelectedData(currentSelection);
-    
     this->tagFilterCombo->blockSignals(false);
 }
 
 void GameListTab::onSortChanged(int index) {
-    Q_UNUSED(index);
-    refreshList();
+    int logicalIndex = this->sortCombo->currentData().toInt();
+    if (logicalIndex == -1) logicalIndex = index; // Fallback
+    
+    Qt::SortOrder order = this->sortOrderBtn->isChecked() ? Qt::DescendingOrder : Qt::AscendingOrder;
+    proxyModel->sort(logicalIndex, order);
 }
 
 void GameListTab::onSortOrderChanged() {
@@ -323,33 +256,24 @@ void GameListTab::onSortOrderChanged() {
     } else {
         this->sortOrderBtn->setText("Asc");
     }
-    refreshList();
+    onSortChanged(this->sortCombo->currentIndex());
 }
 
 void GameListTab::onHeaderClicked(int logicalIndex) {
-    if (logicalIndex < 0 || logicalIndex > 5) return; // Ignore Path column (6)
+    if (logicalIndex < 0 || logicalIndex > 5) return; 
     
-    // Check if we are already sorting by this column
     if (this->sortCombo->currentIndex() == logicalIndex) {
-        // Toggle Order
-        this->sortOrderBtn->click(); // Simulate click to toggle state and refresh
+        this->sortOrderBtn->click(); 
     } else {
-        // Change Column
-        // We need to ensure Sort Combo has items for 0..5
         this->sortCombo->setCurrentIndex(logicalIndex);
-        // Default to Ascending when switching columns? Or keep?
-        // Let's keep current order or reset to Asc.
-        // Usually reset to Asc is standard.
         if (this->sortOrderBtn->isChecked()) {
-            this->sortOrderBtn->click(); // Reset to Asc
+            this->sortOrderBtn->click(); 
         }
     }
 }
 
-void GameListTab::onDoubleClicked(int row, int column) {
-    Q_UNUSED(row);
-    Q_UNUSED(column);
-    // Double click action disabled as per user request
+void GameListTab::onDoubleClicked(const QModelIndex &index) {
+    Q_UNUSED(index);
 }
 
 void GameListTab::showContextMenu(const QPoint &pos) {
@@ -363,64 +287,54 @@ void GameListTab::showContextMenu(const QPoint &pos) {
 }
 
 void GameListTab::openFileLocation() {
-    int row = this->gameTable->currentRow();
-    if (row < 0) return;
-    onDoubleClicked(row, 0);
+    QModelIndex index = this->gameTable->currentIndex();
+    if (!index.isValid()) return;
+    
+    QString path = proxyModel->data(index, GameRoles::FilePathRole).toString();
+    openGameFolder(path);
 }
 
 void GameListTab::removeGame() {
-    int row = this->gameTable->currentRow();
-    if (row < 0) return;
+    QModelIndex index = this->gameTable->currentIndex();
+    if (!index.isValid()) return;
     
-    QString path = this->gameTable->item(row, 6)->text(); // Path is now col 6
+    QString path = proxyModel->data(index, GameRoles::FilePathRole).toString();
     
     if (QMessageBox::question(this, "Remove Game", "Are you sure you want to remove this game from the library?") == QMessageBox::Yes) {
         GameManager::instance().removeGameByPath(path);
     }
 }
 
-void GameListTab::onRowClicked(int row, int column) {
-    Q_UNUSED(column);
+void GameListTab::onRowClicked(const QModelIndex &index) {
+    if (!index.isValid()) return;
+    int row = index.row();
     
-    // 1. If logic for detail row
-    if (this->expandedRow != -1 && row == this->expandedRow + 1) {
-        return; // Clicked on the detail widget itself (though usually consumed by widget)
-    }
-    
-    // 2. Collapse existing if any
-    if (this->expandedRow != -1) {
-        int oldExpanded = this->expandedRow;
-        this->gameTable->removeRow(oldExpanded + 1);
+    // Logic for index expansion using Index widget mapping
+    // QTableView handles this via setIndexWidget natively!
+    if (this->expandedRow == row) {
+        // Collapse
+        this->gameTable->setIndexWidget(proxyModel->index(row, 0), nullptr);
+        this->gameTable->setRowHeight(row, gameTable->verticalHeader()->defaultSectionSize());
         this->expandedRow = -1;
-        
-        // Adjust clicked row index if it was below the expanded row
-        if (row > oldExpanded + 1) {
-            row--; 
-        } else if (row == oldExpanded) {
-            // Clicked the same row to collapse
-            return;
-        }
+        return;
     }
     
-    // 3. Expand new row
+    // Collapse old
+    if (this->expandedRow != -1) {
+        this->gameTable->setIndexWidget(proxyModel->index(this->expandedRow, 0), nullptr);
+        this->gameTable->setRowHeight(this->expandedRow, gameTable->verticalHeader()->defaultSectionSize());
+    }
     
-    QTableWidgetItem *pathItem = this->gameTable->item(row, 6);
-    if (!pathItem) return;
-    QString path = pathItem->text();
-    
-    GameItem item = GameManager::instance().getGameByPath(path);
-    
-    // Insert Row
-    this->gameTable->insertRow(row + 1);
-    this->gameTable->setSpan(row + 1, 0, 1, 7); // Span all columns (now 7)
-    this->gameTable->setRowHeight(row + 1, 280); // Height for detail widget
+    GameItem item = proxyModel->data(index, GameRoles::GameItemRole).value<GameItem>();
     
     GameDetailWidget *detail = new GameDetailWidget(item);
     connect(detail, &GameDetailWidget::playGame, this, &GameListTab::runGame);
     connect(detail, &GameDetailWidget::openFolder, this, &GameListTab::openGameFolder);
     connect(detail, &GameDetailWidget::requestEdit, this, &GameListTab::onEditGameRequested);
     
-    this->gameTable->setCellWidget(row + 1, 0, detail);
+    // Expand new row (span across columns inside the index 0)
+    this->gameTable->setIndexWidget(proxyModel->index(row, 0), detail);
+    this->gameTable->setRowHeight(row, 280); 
     
     this->expandedRow = row;
 }
@@ -431,25 +345,8 @@ void GameListTab::runGame(QString exePath) {
     QFileInfo info(exePath);
     QString workingDir = info.absolutePath();
     
-    // Update Last Played
-    // We need to find which game corresponds to this exe path.
-    // For now, if we trust the context, we should pass the game path or item.
-    // Actually, GameManager's updateLastPlayed takes a 'path' (filePath of the game item).
-    // The runGame slot receives exePath... wait.
-    // The signals from GameDetailWidget send 'exePath'.
-    // We need to know which GameItem triggered this.
-    // BUT! Since GameItems have unique paths, we can search for the game with this exePath?
-    // Not unique enough if multiple games share same exe? Unlikely for folder games.
-    // Better: Iterate games and find one with this exePath.
-    
-    // Optimization: Pass GameItem path to runGame?
-    // Let's stick to existing signature for now and search.
-    
     QList<GameItem> games = GameManager::instance().getGames();
     for (const auto &g : games) {
-        // If it's a folder game, exePath matches g.exePath.
-        // If it's an archive, exePath might be temp?
-        // Let's assume folder games for now as that's the main focus.
         if (g.exePath == exePath || g.filePath == exePath) {
             GameManager::instance().updateLastPlayed(g.filePath);
             break;
@@ -476,10 +373,6 @@ void GameListTab::onEditGameRequested(QString path) {
     GameItem item = GameManager::instance().getGameByPath(path);
     if (item.filePath.isEmpty()) return;
     
-    // Include GameInfoDialog header if not already included? 
-    // It's likely needed. Let's assume it is or add it.
-    // Wait, need to check includes.
-    
     GameInfoDialog dialog(item, this);
     if (dialog.exec() == QDialog::Accepted) {
         GameManager::instance().updateGame(dialog.getGameItem());
@@ -488,19 +381,24 @@ void GameListTab::onEditGameRequested(QString path) {
 
 void GameListTab::onViewToggle() {
     if (this->viewToggleBtn->isChecked()) {
-        this->viewStack->setCurrentWidget(this->gameListWidget);
+        this->viewStack->setCurrentWidget(this->gameListView);
         this->viewToggleBtn->setText("List View");
     } else {
         this->viewStack->setCurrentWidget(this->gameTable);
         this->viewToggleBtn->setText("Card View");
+        // Reset row expansion if any
+        if (this->expandedRow != -1) {
+            this->gameTable->setIndexWidget(proxyModel->index(this->expandedRow, 0), nullptr);
+            this->gameTable->setRowHeight(this->expandedRow, gameTable->verticalHeader()->defaultSectionSize());
+            this->expandedRow = -1;
+        }
     }
 }
 
-void GameListTab::onCardClicked(QListWidgetItem *item) {
-    if (!item) return;
+void GameListTab::onCardClicked(const QModelIndex &index) {
+    if (!index.isValid()) return;
     
-    QString path = item->data(Qt::UserRole).toString();
-    GameItem gameItem = GameManager::instance().getGameByPath(path);
+    GameItem gameItem = proxyModel->data(index, GameRoles::GameItemRole).value<GameItem>();
     if (gameItem.filePath.isEmpty()) return;
 
     QDialog dialog(this);
@@ -508,7 +406,6 @@ void GameListTab::onCardClicked(QListWidgetItem *item) {
     dialog.setMinimumWidth(600);
     
     QVBoxLayout *layout = new QVBoxLayout(&dialog);
-    // Remove margins for cleaner look
     layout->setContentsMargins(0, 0, 0, 0); 
     
     GameDetailWidget *detail = new GameDetailWidget(gameItem);
@@ -517,7 +414,7 @@ void GameListTab::onCardClicked(QListWidgetItem *item) {
     connect(detail, &GameDetailWidget::playGame, this, &GameListTab::runGame);
     connect(detail, &GameDetailWidget::openFolder, this, &GameListTab::openGameFolder);
     connect(detail, &GameDetailWidget::requestEdit, [&](QString p){
-        dialog.accept(); // Close the detail dialog
+        dialog.accept(); 
         this->onEditGameRequested(p);
     });
     

@@ -21,7 +21,7 @@ public:
     void updateGame(const GameItem &item);
     void removeGame(int index);
     void removeGameByPath(const QString &path);
-    QList<GameItem> getGames() const;
+    const QList<GameItem>& getGames() const;
     GameItem getGameByPath(const QString &path) const;
     
     void updateLastPlayed(const QString &path);

@@ -80,7 +80,7 @@ void GameManager::removeGameByPath(const QString &path) {
     }
 }
 
-QList<GameItem> GameManager::getGames() const {
+const QList<GameItem>& GameManager::getGames() const {
     return this->library;
 }
 

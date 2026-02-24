@@ -2,13 +2,17 @@
 #define GAMELISTTAB_H
 
 #include <QWidget>
-#include <QTableWidget>
-#include <QListWidget>
+#include <QTableView>
+#include <QListView>
 #include <QStackedWidget>
 #include <QComboBox>
 #include <QToolButton>
+#include <QSortFilterProxyModel>
 #include "gamemanager.h"
 #include "multiselectcombobox.h"
+#include "gamelibrarymodel.h"
+
+class GameListFilterProxyModel;
 
 class GameListTab : public QWidget {
     Q_OBJECT
@@ -19,12 +23,12 @@ public:
 
 private slots:
     void onSearchChanged(const QString &text);
-    void onDoubleClicked(int row, int column);
+    void onDoubleClicked(const QModelIndex &index);
     void showContextMenu(const QPoint &pos);
     void openFileLocation();
     void removeGame();
 
-    void onRowClicked(int row, int column);
+    void onRowClicked(const QModelIndex &index);
     void runGame(QString exePath);
     void openGameFolder(QString path);
     void onTypeFilterChanged(int index);
@@ -32,7 +36,7 @@ private slots:
 
     // Card View Slots
     void onViewToggle();
-    void onCardClicked(QListWidgetItem *item);
+    void onCardClicked(const QModelIndex &index);
     
     // Sort Slots
     void onSortChanged(int index);
@@ -40,7 +44,7 @@ private slots:
     void onHeaderClicked(int logicalIndex);
     
     // Tag Filter Slot
-    void onTagFilterChanged(int index);
+    void onTagFilterChanged();
     void updateTagFilterCombo();
 
 private:
@@ -54,11 +58,14 @@ private:
     // Sorting
     QComboBox *sortCombo;
     QToolButton *sortOrderBtn;
-    bool sortAscending = false; // Default Descending (Newest/Z-A) or Ascending? Usually Asc for Name, Desc for Date.
+    bool sortAscending = false; 
 
     QStackedWidget *viewStack;
-    QTableWidget *gameTable;
-    QListWidget *gameListWidget;
+    QTableView *gameTable;
+    QListView *gameListView;
+    
+    GameLibraryModel *libraryModel;
+    GameListFilterProxyModel *proxyModel;
     
     int expandedRow;
 };

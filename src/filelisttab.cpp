@@ -43,10 +43,6 @@ void FileListTab::filterItems(QTreeWidgetItem *item) {
     
     bool visible = true;
     if (this->currentFilterType != -1) {
-        // Strict filtering: Only show if type matches exactly
-        // This means if "Zip" is selected, Folders will be hidden (and thus their children).
-        // User explicitly requested NOT to always show folders.
-        
         GameType targetType = static_cast<GameType>(this->currentFilterType);
         bool match = false;
         
